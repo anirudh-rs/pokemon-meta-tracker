@@ -22,7 +22,7 @@ from src.visualisations import (
     plot_legendary_gap_median, plot_stat_profiles,
     plot_type_coverage, plot_dual_type_prevalence,
 )
-from src.model import load_model, predict_viability, build_feature_row, get_top_shap_features
+from src.model import load_model, load_tier_model, predict_viability, predict_tier, build_feature_row, get_top_shap_features
 
 # -- Page config ---------------------------------------------------------------
 st.set_page_config(
@@ -235,33 +235,40 @@ def sh(title, sub="", pid=None):
 def tab_home(df, df_t):
     sh("POKEMETA ANALYSER", "Competitive meta shifts across all 9 generations")
 
+    # Key stats
     c1, c2, c3, c4 = st.columns(4)
-    with c1: st.metric("Total Pokemon",       str(len(df[df['form_type']=='Base'])))
-    with c2: st.metric("Generations",          "9")
-    with c3: st.metric("Tiered Pokemon",       str(int(df_t['is_viable'].notna().sum())))
-    with c4: st.metric("Competitively Viable", str(int((df_t['is_viable']==True).sum())))
+    with c1: st.metric("Total Pokemon",        "1,025")
+    with c2: st.metric("Generations",           "9")
+    with c3: st.metric("Tiered Pokemon",        "606")
+    with c4: st.metric("Competitively Viable",  "168")
 
     divider()
 
     cl, cr = st.columns([3, 2])
     with cl:
         st.markdown("## ABOUT THIS PROJECT")
-        lines = [
-            "<div style='font-family:Nunito,sans-serif;font-size:0.95rem;line-height:1.9;'>",
-            "<p>This dashboard tracks how the Pokemon competitive meta has evolved across all nine",
-            "generations, from the original 151 in Red and Blue to the 1025+ of Scarlet and Violet.</p>",
-            "<p>Using machine learning and data analysis, we explore:</p>",
-            "<ul>",
-            "<li>Which generations introduced the most powerful Pokemon</li>",
-            "<li>How type dominance has shifted over 25+ years</li>",
-            "<li>Whether the legendary power gap is growing or closing</li>",
-            "<li>What stats actually determine competitive viability</li>",
-            "</ul>",
-            "<p>The classifier was trained on Smogon tiers from Gens 1-7, validated on Gen 8,",
-            "and achieves a <strong style='color:#FFCB05'>ROC-AUC of 0.932</strong>.</p>",
-            "</div>",
-        ]
-        st.markdown(" ".join(lines), unsafe_allow_html=True)
+        lines = (
+            "<div style='font-family:Nunito,sans-serif;font-size:0.95rem;line-height:1.9;'>"
+            "<p>This dashboard tracks how the Pokemon competitive meta has evolved across all nine "
+            "generations, from the original 151 in Red and Blue to the 1,025+ of Scarlet and Violet.</p>"
+            "<p>Using machine learning and data analysis, it covers:</p>"
+            "<ul>"
+            "<li><strong style='color:#FFCB05'>Data Pipeline</strong> - 1,194 Pokemon classified "
+            "across Base, Mega, Regional and Alternate forms with derived features</li>"
+            "<li><strong style='color:#FFCB05'>Exploratory Analysis</strong> - Power creep, type "
+            "dominance shifts, legendary impact, stat profiles across all 9 generations</li>"
+            "<li><strong style='color:#FFCB05'>Viability Classifier</strong> - XGBoost model trained "
+            "on Smogon tiers from Gens 1-7, validated on Gen 8, ROC-AUC 0.932</li>"
+            "<li><strong style='color:#FFCB05'>Tier Classifier</strong> - 3-class model predicting "
+            "Top, Mid or Low tier with 58.3% accuracy</li>"
+            "<li><strong style='color:#FFCB05'>Gen 9 Inference</strong> - Model predictions for 112 "
+            "Scarlet and Violet Pokemon with no official tier data yet</li>"
+            "<li><strong style='color:#FFCB05'>Power Rankings</strong> - Generations ranked by "
+            "competitive contribution. Gen 6 leads at 37.2% viable</li>"
+            "</ul>"
+            "</div>"
+        )
+        st.markdown(lines, unsafe_allow_html=True)
 
     with cr:
         hero_url = sprite_url(150, official=True)
@@ -271,46 +278,81 @@ def tab_home(df, df_t):
             'style="width:200px;height:200px;object-fit:contain;'
             'filter:drop-shadow(0 0 18px rgba(204,0,0,0.6));'
             'animation:float 3s ease-in-out infinite;" '
-            'onerror="this.style.display=\'none\'">'
+            'onerror="this.style.display:\'none\'">'
             '</div>',
             unsafe_allow_html=True)
 
         st.markdown("## KEY FINDINGS")
-        findings = [
-            ("Power Creep",      "Non-legendary BST median rose 48 pts across 9 gens"),
-            ("Gap Closing",      "Legendary gap peaked Gen 6 (253 BST), now 116"),
-            ("Fairy Disruption", "1.3% to 17.6% of Gen 6 in one generation"),
-            ("Speed Rules",      "2nd most important viability factor after BST"),
-        ]
-        icons = ["up", "sword", "fairy", "bolt"]
-        emojis = ["📈", "⚔️", "🧚", "⚡"]
-        for (title, desc), emoji in zip(findings, emojis):
+        for emoji, title, desc in [
+            ("📈", "Power Creep",        "Non-legendary BST median rose 48 pts across 9 gens"),
+            ("⚔️", "Gap Closing",        "Legendary gap peaked Gen 6 at 253 BST, now 116"),
+            ("🧚", "Fairy Disruption",   "Went from 1.3% of Gen 5 to 17.6% of Gen 6"),
+            ("⚡", "Speed Dominates",    "2nd most important SHAP feature after BST"),
+            ("🏆", "Gen 6 Leads",        "37.2% of Gen 6 Pokemon are competitively viable"),
+            ("🤖", "Gen 9 Predicted",    "43 of 112 Gen 9 Pokemon predicted viable by the model"),
+            ("🔍", "Model Blind Spot",   "30 overrated Pokemon - good stats, crippling abilities"),
+        ]:
             st.markdown(
                 '<div style="background:#0f3460;border-left:3px solid #CC0000;'
-                'padding:0.5rem 0.7rem;margin-bottom:0.5rem;border-radius:0 6px 6px 0;">'
-                '<span style="font-size:0.9rem">' + emoji + '</span>'
-                '<strong style="color:#FFCB05;font-family:Nunito"> ' + title + '</strong><br>'
-                '<span style="color:#A0A0A0;font-size:0.8rem;font-family:Nunito">' + desc + '</span>'
+                'padding:0.4rem 0.7rem;margin-bottom:0.4rem;border-radius:0 6px 6px 0;">'
+                '<span style="font-size:0.85rem">' + emoji + '</span>'
+                '<strong style="color:#FFCB05;font-family:Nunito;font-size:0.85rem;"> '
+                + title + '</strong><br>'
+                '<span style="color:#A0A0A0;font-size:0.78rem;font-family:Nunito;">'
+                + desc + '</span>'
                 '</div>',
                 unsafe_allow_html=True)
 
     divider()
-    st.markdown("## DATA SOURCES")
-    cards = [
-        ("Pokemon Dataset",  "1,194 Pokemon - All 9 Gens<br>Base stats, types, forms"),
-        ("Smogon Tiers",     "606 tiered Pokemon - Gens 1-8<br>OU, UU, Uber, RU, NU, PU"),
-        ("XGBoost Model",    "Trained Gens 1-7 - Tested Gen 8<br>ROC-AUC: 0.932"),
+
+    # Dashboard guide
+    st.markdown("## WHAT'S INSIDE")
+    tabs_info = [
+        ("📊", "GENERATIONS",          "Power creep, BST trends and legendary gap across all 9 gens"),
+        ("🌊", "TYPE DOMINANCE",        "How type frequencies shifted, including Fairy's Gen 6 disruption"),
+        ("🏆", "LEGENDARY IMPACT",      "How legendaries disrupted competitive balance per generation"),
+        ("⚔️", "STAT PROFILES",         "Physical Sweepers, Special Walls and more across generations"),
+        ("🤖", "VIABILITY PREDICTOR",   "Input any stats and typing, get a viability prediction with SHAP"),
+        ("🔬", "MODEL INSIGHTS",        "SHAP importance, confusion matrix, and outlier spotlight"),
+        ("🌟", "GEN 9 PREDICTIONS",     "Model predictions for all 112 Scarlet and Violet Pokemon"),
+        ("🎖️", "POWER RANKINGS",        "Generations ranked by competitive contribution"),
     ]
-    for col, (t, b) in zip(st.columns(3), cards):
+
+    col1, col2 = st.columns(2)
+    for i, (icon, title, desc) in enumerate(tabs_info):
+        with col1 if i % 2 == 0 else col2:
+            st.markdown(
+                '<div style="background:#0f3460;border:1px solid #CC0000;'
+                'padding:0.7rem;border-radius:8px;margin-bottom:0.5rem;'
+                'display:flex;gap:0.7rem;align-items:flex-start;">'
+                '<span style="font-size:1.1rem;">' + icon + '</span>'
+                '<div>'
+                '<p style="font-family:Press Start 2P;font-size:0.42rem;'
+                'color:#FFCB05;margin:0 0 4px;">' + title + '</p>'
+                '<p style="font-family:Nunito;font-size:0.8rem;'
+                'color:#A0A0A0;margin:0;">' + desc + '</p>'
+                '</div></div>',
+                unsafe_allow_html=True)
+
+    divider()
+
+    # Data sources
+    st.markdown("## DATA SOURCES")
+    for col, (t, b) in zip(st.columns(3), [
+        ("Pokemon Dataset",   "1,194 Pokemon across all 9 gens<br>Base stats, types, forms"),
+        ("Smogon Tiers",      "606 tiered Pokemon across Gens 1-8<br>OU, UU, Uber, RU, NU, PU"),
+        ("XGBoost Models",    "Binary: ROC-AUC 0.932<br>Tier classifier: 58.3% accuracy"),
+    ]):
         with col:
             st.markdown(
                 '<div style="background:#0f3460;border:1px solid #FFCB05;'
                 'padding:0.9rem;border-radius:8px;text-align:center;">'
-                '<p style="color:#FFCB05;font-family:Nunito;font-weight:700;margin-bottom:4px;">' + t + '</p>'
-                '<p style="color:#A0A0A0;font-size:0.82rem;font-family:Nunito;margin:0;">' + b + '</p>'
+                '<p style="color:#FFCB05;font-family:Nunito;font-weight:700;margin-bottom:4px;">'
+                + t + '</p>'
+                '<p style="color:#A0A0A0;font-size:0.82rem;font-family:Nunito;margin:0;">'
+                + b + '</p>'
                 '</div>',
                 unsafe_allow_html=True)
-
 # -- TAB 2: GENERATION OVERVIEW ------------------------------------------------
 def tab_generations(df):
     sh("GENERATION OVERVIEW", "How has Pokemon power evolved across generations?", pid=6)
@@ -356,7 +398,7 @@ def tab_generations(df):
             "<tr style='border-bottom:1px solid #0f3460;'>"
             "<td style='padding:5px;text-align:center;'>" + sprite_img(GEN_POKEMON.get(g, 25), 36) + "</td>"
             "<td style='padding:5px;text-align:center;font-family:Press Start 2P;"
-            "font-size:0.45rem;color:#FFCB05;'>" + str(g) + "</td>"
+            "font-size:0.5rem;color:#FFCB05;'>" + str(g) + "</td>"
             "<td style='padding:5px;text-align:center;'>" + str(int(r['Total'])) + "</td>"
             "<td style='padding:5px;text-align:center;color:" + bc + ";'>" + str(r['Avg BST']) + "</td>"
             "<td style='padding:5px;text-align:center;'>" + str(r['Med BST']) + "</td>"
@@ -367,7 +409,7 @@ def tab_generations(df):
 
     headers = ['', 'GEN', 'COUNT', 'AVG BST', 'MED BST', 'LEGS', 'DUAL%']
     ths = "".join(
-        '<th style="padding:7px;font-family:Press Start 2P;font-size:0.38rem;color:#FFCB05;">'
+        '<th style="padding:7px;font-family:Press Start 2P;font-size:0.5rem;color:#FFCB05;">'
         + h + '</th>' for h in headers)
     st.markdown(
         '<table style="width:100%;border-collapse:collapse;background:#0f3460;'
@@ -473,8 +515,150 @@ def tab_profiles(df):
         tp(plot_type_coverage(df_f, base_forms_only=False, legendaries=inc), 400),
         use_container_width=True, key="pc")
 
+# Full defensive type chart
+# DEFENSIVE_CHART[defending_type] = {attacking_type: multiplier}
+DEFENSIVE_CHART = {
+    "Normal":   {"Fighting":2, "Ghost":0},
+    "Fire":     {"Water":2,"Ground":2,"Rock":2,"Fire":0.5,"Grass":0.5,"Ice":0.5,"Bug":0.5,"Steel":0.5,"Fairy":0.5},
+    "Water":    {"Electric":2,"Grass":2,"Water":0.5,"Ice":0.5,"Steel":0.5,"Fire":0.5},
+    "Electric": {"Ground":2,"Electric":0.5,"Flying":0.5,"Steel":0.5},
+    "Grass":    {"Fire":2,"Ice":2,"Poison":2,"Flying":2,"Bug":2,"Water":0.5,"Electric":0.5,"Grass":0.5,"Ground":0.5},
+    "Ice":      {"Fire":2,"Fighting":2,"Rock":2,"Steel":2,"Ice":0.5},
+    "Fighting": {"Flying":2,"Psychic":2,"Fairy":2,"Bug":0.5,"Rock":0.5,"Dark":0.5},
+    "Poison":   {"Ground":2,"Psychic":2,"Fighting":0.5,"Poison":0.5,"Bug":0.5,"Grass":0.5,"Fairy":0.5},
+    "Ground":   {"Water":2,"Grass":2,"Ice":2,"Electric":0,"Poison":0.5,"Rock":0.5},
+    "Flying":   {"Electric":2,"Ice":2,"Rock":2,"Ground":0,"Fighting":0.5,"Bug":0.5,"Grass":0.5},
+    "Psychic":  {"Bug":2,"Ghost":2,"Dark":2,"Fighting":0.5,"Psychic":0.5},
+    "Bug":      {"Fire":2,"Flying":2,"Rock":2,"Fighting":0.5,"Ground":0.5,"Grass":0.5},
+    "Rock":     {"Water":2,"Grass":2,"Fighting":2,"Ground":2,"Steel":2,"Normal":0.5,"Fire":0.5,"Poison":0.5,"Flying":0.5},
+    "Ghost":    {"Ghost":2,"Dark":2,"Normal":0,"Fighting":0,"Poison":0.5,"Bug":0.5},
+    "Dragon":   {"Ice":2,"Dragon":2,"Fairy":2,"Fire":0.5,"Water":0.5,"Electric":0.5,"Grass":0.5},
+    "Dark":     {"Fighting":2,"Bug":2,"Fairy":2,"Ghost":0.5,"Dark":0.5,"Psychic":0},
+    "Steel":    {"Fire":2,"Fighting":2,"Ground":2,"Normal":0.5,"Grass":0.5,"Ice":0.5,"Flying":0.5,"Psychic":0.5,"Bug":0.5,"Rock":0.5,"Dragon":0.5,"Steel":0.5,"Fairy":0.5,"Poison":0},
+    "Fairy":    {"Poison":2,"Steel":2,"Fighting":0.5,"Bug":0.5,"Dark":0.5,"Dragon":0},
+}
+
+def compute_defensive_matchups(type_1, type_2="None"):
+    """
+    Returns a dict of {attacking_type: final_multiplier} for a given typing.
+    Combines both types by multiplying their individual multipliers.
+    """
+    all_types = list(DEFENSIVE_CHART.keys())
+    result = {}
+    for atk in all_types:
+        m1 = DEFENSIVE_CHART.get(type_1, {}).get(atk, 1)
+        m2 = DEFENSIVE_CHART.get(type_2, {}).get(atk, 1) if type_2 != "None" else 1
+        final = m1 * m2
+        if final != 1:
+            result[atk] = final
+    return result
+
+@st.dialog("SEE WHAT BEATS ME", width="large")
+def show_type_matchup_dialog(type_1, type_2, df):
+    """Modal dialog showing defensive matchups and top counters."""
+
+    t2_display = " / " + type_2 if type_2 != "None" else ""
+    st.markdown(
+        '<p style="font-family:Press Start 2P;font-size:0.5rem;color:#FFCB05;">'
+        'DEFENSIVE PROFILE: ' + type_1.upper() + t2_display.upper() + '</p>',
+        unsafe_allow_html=True)
+
+    matchups = compute_defensive_matchups(type_1, type_2)
+
+    # Sort into categories
+    weak4x   = {t:m for t,m in matchups.items() if m == 4}
+    weak2x   = {t:m for t,m in matchups.items() if m == 2}
+    resist2x = {t:m for t,m in matchups.items() if m == 0.5}
+    resist4x = {t:m for t,m in matchups.items() if m == 0.25}
+    immune   = {t:m for t,m in matchups.items() if m == 0}
+
+    # Matchup summary badges
+    def badge_row(label, types_dict, colour):
+        if not types_dict:
+            return
+        badges = '<div style="margin-bottom:0.6rem;">'
+        badges += '<span style="font-family:Press Start 2P;font-size:0.45rem;color:' + colour + ';">' + label + '</span><br>'
+        badges += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">'
+        for t in types_dict:
+            tc = TYPE_COLOURS.get(t, "#888")
+            badges += (
+                '<span style="background:' + tc + ';color:white;'
+                'font-family:Nunito;font-size:0.75rem;font-weight:700;'
+                'padding:2px 10px;border-radius:10px;">' + t + '</span>'
+            )
+        badges += '</div></div>'
+        st.markdown(badges, unsafe_allow_html=True)
+
+    badge_row("4x WEAK", weak4x, "#FF4444")
+    badge_row("2x WEAK", weak2x, "#F44336")
+    badge_row("RESISTS (0.5x)", resist2x, "#4CAF50")
+    badge_row("RESISTS (0.25x)", resist4x, "#00C853")
+    badge_row("IMMUNE", immune, "#A0A0A0")
+
+    if not weak4x and not weak2x:
+        st.markdown(
+            '<p style="font-family:Nunito;color:#4CAF50;font-size:0.9rem;">'
+            'No weaknesses! Exceptional defensive typing.</p>',
+            unsafe_allow_html=True)
+
+    # Top 5 counters per weakness type
+    all_weaknesses = list(weak4x.keys()) + list(weak2x.keys())
+    if all_weaknesses:
+        st.markdown(
+            '<p style="font-family:Press Start 2P;font-size:0.5rem;'
+            'color:#FFCB05;margin-top:0.8rem;">TOP COUNTERS BY WEAKNESS TYPE</p>',
+            unsafe_allow_html=True)
+
+        base_df = df[(df['form_type'] == 'Base') &
+                     (df['legendary_category'] == 'None')].copy()
+
+        for weak_type in all_weaknesses:
+            multiplier = matchups[weak_type]
+            label = "4x" if multiplier == 4 else "2x"
+            tc = TYPE_COLOURS.get(weak_type, "#888")
+
+            # Top 5 Pokemon of this attacking type by BST
+            top5 = base_df[
+                (base_df['type_1'] == weak_type) |
+                (base_df['type_2'] == weak_type)
+            ].nlargest(5, 'bst')
+
+            if len(top5) == 0:
+                continue
+
+            st.markdown(
+                '<div style="margin-bottom:0.8rem;">'
+                '<span style="background:' + tc + ';color:white;'
+                'font-family:Nunito;font-size:0.8rem;font-weight:700;'
+                'padding:2px 12px;border-radius:10px;">'
+                + weak_type + ' (' + label + ')</span>'
+                '</div>',
+                unsafe_allow_html=True)
+
+            cols = st.columns(5)
+            for i, (_, row) in enumerate(top5.iterrows()):
+                with cols[i]:
+                    t2d  = " / " + row['type_2'] if row['type_2'] != "None" else ""
+                    surl = sprite_url(int(row['pokedex_id']), official=False)
+                    st.markdown(
+                        '<div style="background:#0f3460;border:1px solid ' + tc + ';'
+                        'border-radius:8px;padding:0.4rem;text-align:center;">'
+                        '<img src="' + surl + '" width="56" height="56" '
+                        'style="image-rendering:pixelated;" '
+                        'onerror="this.style.display=\'none\'">'
+                        '<p style="font-family:Press Start 2P;font-size:0.42rem;'
+                        'color:#FFCB05;margin:3px 0 1px;">'
+                        + row['name'].upper() + '</p>'
+                        '<p style="font-family:Nunito;font-size:0.65rem;'
+                        'color:#A0A0A0;margin:0;">'
+                        + row['type_1'] + t2d + '</p>'
+                        '<p style="font-family:Nunito;font-size:0.7rem;'
+                        'color:#EAEAEA;margin:0;">BST ' + str(int(row['bst'])) + '</p>'
+                        '</div>',
+                        unsafe_allow_html=True)
+
 # -- TAB 6: VIABILITY PREDICTOR ------------------------------------------------
-def tab_predictor(df, model_data):
+def tab_predictor(df, model_data, tier_model_data):
     sh("VIABILITY PREDICTOR",
        "Design a Pokemon and see if it would be competitively viable", pid=778)
 
@@ -506,7 +690,7 @@ def tab_predictor(df, model_data):
     # Preset buttons - columns unpacked once outside the loop
     st.markdown(
         "<p style='font-family:Press Start 2P;font-size:0.42rem;color:#FFCB05;"
-        "margin-bottom:0.3rem;'>QUICK PRESETS</p>",
+        "margin-bottom:0.42rem;'>QUICK PRESETS</p>",
         unsafe_allow_html=True)
 
     p0,p1,p2,p3,p4,p5,p6,p7,p8 = st.columns(9)
@@ -524,7 +708,7 @@ def tab_predictor(df, model_data):
     # Stats inputs
     st.markdown(
         "<p style='font-family:Press Start 2P;font-size:0.42rem;color:#FFCB05;"
-        "margin-bottom:0.3rem;'>STATS AND TYPING</p>",
+        "margin-bottom:0.42rem;'>STATS AND TYPING</p>",
         unsafe_allow_html=True)
 
     s1,s2,s3,s4,s5,s6 = st.columns(6)
@@ -557,13 +741,13 @@ def tab_predictor(df, model_data):
         bst = sum(st.session_state["pred_" + x]
                   for x in ["hp","attack","defense","sp_atk","sp_def","speed"])
         st.markdown(
-            '<div style="background:#0f3460;border:1px solid #FFCB05;padding:0.35rem;'
+            '<div style="background:#0f3460;border:1px solid #FFCB05;padding:0.42rem;'
             'border-radius:6px;text-align:center;margin-top:0.15rem;">'
-            '<span style="font-family:Press Start 2P;font-size:0.38rem;color:#A0A0A0;">BST</span><br>'
+            '<span style="font-family:Press Start 2P;font-size:0.45rem;color:#A0A0A0;">BST</span><br>'
             '<span style="font-family:Press Start 2P;font-size:0.95rem;color:#FFCB05;">'
             + str(bst) + '</span></div>',
             unsafe_allow_html=True)
-        st.markdown("<div style='margin-top:0.3rem;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top:0.42rem;'></div>", unsafe_allow_html=True)
         go_btn = st.button("ANALYSE", use_container_width=True, key="analyse_btn")
 
     divider()
@@ -639,6 +823,63 @@ def tab_predictor(df, model_data):
                                    zerolinewidth=2))
                     st.plotly_chart(tp(fig_sh, 340),
                                     use_container_width=True, key="shap_bar")
+                    # Tier prediction
+                    tier_result = predict_tier(row, tier_model_data)
+                    tier        = tier_result['tier']
+                    tier_probs  = tier_result['probabilities']
+
+                    tier_colours_map = {
+                        'Top Tier': '#F95587',
+                        'Mid Tier': '#FFCB05',
+                        'Low Tier': '#6390F0',
+                    }
+                    tier_definitions = {
+                        'Top Tier': 'Uber / OU — used in the highest levels of competitive play',
+                        'Mid Tier': 'UU / RU — solid but outclassed in top formats',
+                        'Low Tier': 'NU / PU — rarely used competitively',
+                    }
+                    tier_col = tier_colours_map.get(tier, '#EAEAEA')
+                    tier_def = tier_definitions.get(tier, '')
+
+                    # Three probability boxes
+                    boxes_html = '<div style="display:flex;gap:8px;margin-bottom:10px;">'
+                    for t in ['Top Tier', 'Mid Tier', 'Low Tier']:
+                        p      = tier_probs[t]
+                        tc     = tier_colours_map[t]
+                        weight = 'font-weight:700;' if t == tier else ''
+                        boxes_html += (
+                            '<div style="flex:1;text-align:center;background:#1a1a2e;'
+                            + ('border:2px solid ' + tc if t == tier else 'border:1px solid #333') + ';'
+                            'border-radius:8px;padding:0.5rem 0.3rem;">'
+                            '<p style="font-family:Press Start 2P;font-size:0.42rem;'
+                            'color:' + tc + ';margin:0 0 4px;' + weight + '">' + t.upper() + '</p>'
+                            '<p style="font-family:Nunito;font-size:0.85rem;'
+                            'color:#EAEAEA;margin:0;' + weight + '">' + str(p) + '%</p>'
+                            '</div>'
+                        )
+                    boxes_html += '</div>'
+
+                    st.markdown(
+                        '<div style="margin-top:1.5rem;'
+                        'border-left:4px solid ' + tier_col + ';'
+                        'background:#0f3460;'
+                        'padding:0.9rem 1rem;border-radius:0 8px 8px 0;">'
+
+                        '<p style="font-family:Press Start 2P;font-size:0.5rem;'
+                        'color:' + tier_col + ';margin:0 0 4px;">PREDICTED TIER</p>'
+
+                        '<p style="font-family:Press Start 2P;font-size:0.75rem;'
+                        'color:' + tier_col + ';margin:0 0 6px;">' + tier.upper() + '</p>'
+
+                        '<p style="font-family:Nunito;font-size:0.82rem;'
+                        'color:#A0A0A0;margin:0 0 12px;">' + tier_def + '</p>'
+
+                        '<p style="font-family:Nunito;font-size:0.72rem;'
+                        'color:#555;margin:0;">' + tier_result['accuracy_note'] + '</p>'
+                        '</div>',
+                        unsafe_allow_html=True)
+
+                st.markdown(boxes_html, unsafe_allow_html=True)
 
                 divider()
                 st.markdown(
@@ -675,6 +916,15 @@ def tab_predictor(df, model_data):
                                 'generation','stat_profile']].copy()
                 disp.index = range(1, len(disp) + 1)
                 st.dataframe(disp, use_container_width=True)
+            
+                # SEE WHAT BEATS ME button
+                st.markdown("<div style='margin-top:0.8rem;'></div>", unsafe_allow_html=True)
+                if st.button("SEE WHAT BEATS ME", key="beats_me_btn"):
+                    show_type_matchup_dialog(
+                        st.session_state["pred_type1"],
+                        st.session_state["pred_type2"],
+                        df
+                    )
 
             except Exception as e:
                 st.error("Prediction error: " + str(e))
@@ -734,6 +984,119 @@ def tab_model(df, df_t, model_data):
     st.plotly_chart(tp(fig_i, 600), use_container_width=True, key="mi")
 
     divider()
+    st.markdown("### OUTLIER SPOTLIGHT")
+    st.markdown(
+        "<p style='font-family:Nunito;color:#A0A0A0;font-size:0.85rem;'>"
+        "Pokemon where the model strongly disagrees with Smogon. "
+        "Reveals what base stats and typing cannot capture - "
+        "abilities, movepool, and speed tier interactions.</p>",
+        unsafe_allow_html=True)
+
+    # Run predictions on all tiered base form Pokemon
+    df_tiered_base = df_t[
+        (df_t['is_viable'].notna()) &
+        (df_t['form_type'] == 'Base')
+    ].copy()
+
+    for col in fc:
+        if col not in df_tiered_base.columns:
+            df_tiered_base[col] = 0
+
+    probs_all = mdl.predict_proba(df_tiered_base[fc])[:, 1]
+    df_tiered_base['pred_probability'] = (probs_all * 100).round(1)
+    df_tiered_base['pred_viable']      = (probs_all >= model_data['threshold']).astype(bool)
+    df_tiered_base['actual_viable']    = df_tiered_base['is_viable'].astype(bool)
+
+    overrated = df_tiered_base[
+        (df_tiered_base['pred_viable'] == True) &
+        (df_tiered_base['actual_viable'] == False)
+    ].sort_values('pred_probability', ascending=False).head(10)
+
+    underrated = df_tiered_base[
+        (df_tiered_base['pred_viable'] == False) &
+        (df_tiered_base['actual_viable'] == True)
+    ].sort_values('pred_probability', ascending=True).head(10)
+
+    col_over, col_under = st.columns(2)
+
+    with col_over:
+        st.markdown(
+            '<p style="font-family:Press Start 2P;font-size:0.5rem;color:#F44336;">'
+            'OVERRATED BY MODEL</p>'
+            '<p style="font-family:Nunito;color:#A0A0A0;font-size:0.8rem;margin-top:-0.42rem;">'
+            'Good stats, but ability or movepool lets them down</p>',
+            unsafe_allow_html=True)
+
+        for _, row in overrated.iterrows():
+            t2   = " / " + row['type_2'] if row['type_2'] != "None" else ""
+            surl = sprite_url(int(row['pokedex_id']))
+            prob = round(float(row['pred_probability']), 1)
+            st.markdown(
+                '<div style="display:flex;align-items:center;gap:0.8rem;'
+                'background:#0f3460;border-left:3px solid #F44336;'
+                'padding:0.5rem 0.7rem;margin-bottom:0.4rem;border-radius:0 6px 6px 0;">'
+                '<img src="' + surl + '" width="40" height="40" '
+                'style="image-rendering:pixelated;" '
+                'onerror="this.style.display=\'none\'">'
+                '<div style="flex:1;">'
+                '<p style="font-family:Press Start 2P;font-size:0.45rem;'
+                'color:#FFCB05;margin:0;">' + row['name'].upper() + '</p>'
+                '<p style="font-family:Nunito;font-size:0.75rem;'
+                'color:#A0A0A0;margin:0;">'
+                + row['type_1'] + t2 + ' - BST ' + str(int(row['bst'])) + '</p>'
+                '</div>'
+                '<div style="text-align:right;">'
+                '<p style="font-family:Press Start 2P;font-size:0.4rem;'
+                'color:#F44336;margin:0;">' + str(prob) + '%</p>'
+                '<p style="font-family:Nunito;font-size:0.7rem;'
+                'color:#A0A0A0;margin:0;">actual: ' + row['tier'] + '</p>'
+                '</div></div>',
+                unsafe_allow_html=True)
+
+    with col_under:
+        st.markdown(
+            '<p style="font-family:Press Start 2P;font-size:0.5rem;color:#4CAF50;">'
+            'UNDERRATED BY MODEL</p>'
+            '<p style="font-family:Nunito;color:#A0A0A0;font-size:0.8rem;margin-top:-0.42rem;">'
+            'Weak stats on paper, but ability or niche makes them viable</p>',
+            unsafe_allow_html=True)
+
+        if len(underrated) == 0:
+            st.markdown(
+                '<div style="background:#0f3460;border:1px dashed #A0A0A0;'
+                'padding:1rem;border-radius:6px;text-align:center;">'
+                '<p style="font-family:Nunito;color:#A0A0A0;font-size:0.85rem;">'
+                'No underrated Pokemon found at current threshold.</p>'
+                '</div>',
+                unsafe_allow_html=True)
+        else:
+            for _, row in underrated.iterrows():
+                t2   = " / " + row['type_2'] if row['type_2'] != "None" else ""
+                surl = sprite_url(int(row['pokedex_id']))
+                prob = round(float(row['pred_probability']), 1)
+                st.markdown(
+                    '<div style="display:flex;align-items:center;gap:0.8rem;'
+                    'background:#0f3460;border-left:3px solid #4CAF50;'
+                    'padding:0.5rem 0.7rem;margin-bottom:0.4rem;border-radius:0 6px 6px 0;">'
+                    '<img src="' + surl + '" width="40" height="40" '
+                    'style="image-rendering:pixelated;" '
+                    'onerror="this.style.display=\'none\'">'
+                    '<div style="flex:1;">'
+                    '<p style="font-family:Press Start 2P;font-size:0.45rem;'
+                    'color:#FFCB05;margin:0;">' + row['name'].upper() + '</p>'
+                    '<p style="font-family:Nunito;font-size:0.75rem;'
+                    'color:#A0A0A0;margin:0;">'
+                    + row['type_1'] + t2 + ' - BST ' + str(int(row['bst'])) + '</p>'
+                    '</div>'
+                    '<div style="text-align:right;">'
+                    '<p style="font-family:Press Start 2P;font-size:0.4rem;'
+                    'color:#4CAF50;margin:0;">' + str(prob) + '%</p>'
+                    '<p style="font-family:Nunito;font-size:0.7rem;'
+                    'color:#A0A0A0;margin:0;">actual: ' + row['tier'] + '</p>'
+                    '</div></div>',
+                    unsafe_allow_html=True)
+
+    divider()
     st.markdown("### TIER DISTRIBUTION IN TRAINING DATA")
     tc = df_t[df_t['tier'] != 'Untiered']['tier'].value_counts().reset_index()
     tc.columns = ['Tier','Count']
@@ -753,9 +1116,9 @@ def main():
     inject_css()
 
     st.markdown(
-        '<div style="text-align:center;padding:0.4rem 0 0.3rem;">'
+        '<div style="text-align:center;padding:0.4rem 0 0.42rem;">'
         '<h1 style="font-size:0.95rem !important;">~ POKEMETA ANALYSER ~</h1>'
-        '<p style="font-family:Nunito;color:#A0A0A0;font-size:0.85rem;margin-top:-0.3rem;">'
+        '<p style="font-family:Nunito;color:#A0A0A0;font-size:0.85rem;margin-top:-0.42rem;">'
         'Competitive Meta Shift Tracker - Gens 1 to 9</p>'
         '</div>',
         unsafe_allow_html=True)
@@ -766,16 +1129,17 @@ def main():
 
     @st.cache_resource
     def get_model():
-        return load_model()
+        return load_model(), load_tier_model()
 
     with st.spinner("Loading Pokedex..."):
         df, df_t = get_data()
-        md       = get_model()
+        md, td   = get_model()
 
     tabs = st.tabs([
         "HOME", "GENERATIONS", "TYPE DOMINANCE",
         "LEGENDARY IMPACT", "STAT PROFILES",
         "VIABILITY PREDICTOR", "MODEL INSIGHTS",
+        "GEN 9 PREDICTIONS", "POWER RANKINGS",
     ])
 
     with tabs[0]: tab_home(df, df_t)
@@ -783,8 +1147,333 @@ def main():
     with tabs[2]: tab_types(df)
     with tabs[3]: tab_legendary(df)
     with tabs[4]: tab_profiles(df)
-    with tabs[5]: tab_predictor(df, md)
+    with tabs[5]: tab_predictor(df, md, td)
     with tabs[6]: tab_model(df, df_t, md)
+    with tabs[7]: tab_gen9(df, md)
+    with tabs[8]: tab_rankings(df, df_t)
+
+def tab_gen9(df, model_data):
+    sh("GEN 9 PREDICTIONS",
+       "Model predictions for Scarlet and Violet - no official Smogon tiers yet",
+       pid=995)
+
+    # Run predictions
+    model        = model_data['model']
+    feature_cols = model_data['feature_cols']
+    threshold    = model_data['threshold']
+
+    gen9 = df[
+        (df['generation'] == 9) &
+        (df['form_type'] == 'Base')
+    ].copy()
+
+    for col in feature_cols:
+        if col not in gen9.columns:
+            gen9[col] = 0
+
+    probs = model.predict_proba(gen9[feature_cols])[:, 1]
+    preds = (probs >= threshold).astype(int)
+
+    gen9['viable_probability'] = (probs * 100).round(1)
+    gen9['predicted_viable']   = preds.astype(bool)
+    gen9['predicted_tier']     = gen9['viable_probability'].apply(
+        lambda p: 'Likely OU/Uber' if p >= 75
+        else ('Possibly UU'  if p >= 50
+        else ('Borderline'   if p >= 35
+        else 'Likely NU/PU'))
+    )
+    gen9 = gen9.sort_values('viable_probability', ascending=False).reset_index(drop=True)
+
+    # Summary metrics
+    viable     = int(gen9['predicted_viable'].sum())
+    not_viable = int((~gen9['predicted_viable']).sum())
+    top_prob   = gen9['viable_probability'].iloc[0]
+    avg_prob   = gen9['viable_probability'].mean()
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: st.metric("Gen 9 Pokemon",       str(len(gen9)))
+    with c2: st.metric("Predicted Viable",    str(viable))
+    with c3: st.metric("Predicted Not Viable",str(not_viable))
+    with c4: st.metric("Avg Viability Score", str(round(avg_prob, 1)) + "%")
+
+    # Disclaimer
+    st.markdown(
+        '<div style="background:#0f3460;border-left:3px solid #FFCB05;'
+        'padding:0.8rem 1rem;border-radius:0 6px 6px 0;margin:0.8rem 0;">'
+        '<p style="font-family:Nunito;color:#FFCB05;font-weight:700;margin:0 0 4px;">NOTE</p>'
+        '<p style="font-family:Nunito;color:#A0A0A0;font-size:0.85rem;margin:0;">'
+        'These are model predictions based on base stats and typing only. '
+        'No official Smogon Gen 9 tier data was used. '
+        'The model was trained on Gens 1-7 and validated on Gen 8. '
+        'Abilities, movepool, and Speed tier interactions are not captured.</p>'
+        '</div>',
+        unsafe_allow_html=True)
+
+    divider()
+
+    # Top 10 viable with sprites
+    st.markdown("### TOP 10 PREDICTED VIABLE")
+    top10 = gen9[gen9['predicted_viable']].head(10)
+
+    cols = st.columns(5)
+    for i, (_, row) in enumerate(top10.iterrows()):
+        with cols[i % 5]:
+            prob     = row['viable_probability']
+            col_bar  = "#4CAF50" if prob >= 75 else "#FFCB05"
+            t2       = " / " + row['type_2'] if row['type_2'] != "None" else ""
+            surl     = sprite_url(int(row['pokedex_id']), official=True)
+            st.markdown(
+                '<div style="background:#0f3460;border:1px solid ' + col_bar + ';'
+                'border-radius:8px;padding:0.6rem;text-align:center;margin-bottom:0.5rem;">'
+                '<img src="' + surl + '" width="80" height="80" '
+                'style="object-fit:contain;" onerror="this.style.display=\'none\'">'
+                '<p style="font-family:Press Start 2P;font-size:0.42rem;'
+                'color:#FFCB05;margin:4px 0 2px;">' + row['name'].upper() + '</p>'
+                '<p style="font-family:Nunito;font-size:0.75rem;'
+                'color:#A0A0A0;margin:0;">' + row['type_1'] + t2 + '</p>'
+                '<p style="font-family:Press Start 2P;font-size:0.45rem;'
+                'color:' + col_bar + ';margin:4px 0 0;">' + str(round(float(prob), 1)) + '%</p>'
+                '</div>',
+                unsafe_allow_html=True)
+
+    divider()
+
+    # Tier distribution chart
+    st.markdown("### PREDICTED TIER DISTRIBUTION")
+    tier_order  = ['Likely OU/Uber', 'Possibly UU', 'Borderline', 'Likely NU/PU']
+    tier_colours= ['#F95587', '#FFCB05', '#6390F0', '#A0A0A0']
+    tier_counts = gen9['predicted_tier'].value_counts().reindex(tier_order, fill_value=0).reset_index()
+    tier_counts.columns = ['Tier', 'Count']
+
+    fig_tier = px.bar(
+        tier_counts, x='Tier', y='Count',
+        title="Gen 9 Predicted Tier Distribution",
+        color='Tier',
+        color_discrete_sequence=tier_colours,
+    )
+    fig_tier.update_layout(showlegend=False)
+    st.plotly_chart(tp(fig_tier, 380), use_container_width=True, key="g9_tiers")
+
+    divider()
+
+    # Full table with filters
+    st.markdown("### FULL GEN 9 PREDICTIONS")
+
+    fc1, fc2 = st.columns(2)
+    with fc1:
+        tier_filter = st.multiselect(
+            "Filter by predicted tier",
+            options=tier_order,
+            default=tier_order,
+            key="g9_tier_filter")
+    with fc2:
+        type_filter = st.multiselect(
+            "Filter by type",
+            options=sorted(df['type_1'].unique().tolist()),
+            default=[],
+            key="g9_type_filter")
+
+    display = gen9[gen9['predicted_tier'].isin(tier_filter)].copy()
+    if type_filter:
+        display = display[
+            display['type_1'].isin(type_filter) |
+            display['type_2'].isin(type_filter)
+        ]
+
+    display_cols = ['name', 'type_1', 'type_2', 'bst',
+                    'hp', 'attack', 'defense',
+                    'sp_attack', 'sp_defense', 'speed',
+                    'viable_probability', 'predicted_tier']
+    display_out = display[display_cols].copy()
+    display_out.index = range(1, len(display_out) + 1)
+    display_out['viable_probability'] = display_out['viable_probability'].apply(
+        lambda x: str(round(float(x), 1)) + '%'
+    )
+    st.dataframe(display_out, use_container_width=True)
+
+def tab_rankings(df, df_t):
+    sh("GENERATION POWER RANKINGS",
+       "Which generation produced the most competitively relevant Pokemon?",
+       pid=445)
+
+    # Build rankings data
+    base = df_t[
+        (df_t['form_type'] == 'Base') &
+        (df_t['generation'] <= 8)
+    ].copy()
+
+    tier_map_r = {
+        'AG':'Top','Uber':'Top','OU':'Top','BL':'Top',
+        'UU':'Mid','BL2':'Mid','RU':'Mid',
+        'BL3':'Low','NU':'Low','BL4':'Low','PU':'Low','ZU':'Low',
+    }
+    base['tier_class'] = base['tier'].map(tier_map_r)
+
+    summary = base.groupby('generation').agg(
+        total=('name','count'),
+        tiered=('tier', lambda x:(x!='Untiered').sum()),
+        top_tier=('tier_class', lambda x:(x=='Top').sum()),
+        viable=('is_viable', lambda x:(x==True).sum()),
+        avg_bst_viable=('bst', lambda x: round(
+            x[base.loc[x.index,'is_viable']==True].mean(), 1)),
+    ).round(1)
+
+    summary['viable_pct'] = (summary['viable'] / summary['tiered'] * 100).round(1)
+    summary = summary.sort_values('viable_pct', ascending=False).reset_index()
+    summary['rank'] = range(1, len(summary)+1)
+
+    medals = {1:'🥇', 2:'🥈', 3:'🥉'}
+
+    # Top 3 highlight cards
+    st.markdown(
+        '<p style="font-family:Press Start 2P;font-size:0.5rem;'
+        'color:#FFCB05;margin-bottom:0.5rem;">TOP 3 GENERATIONS</p>',
+        unsafe_allow_html=True)
+
+    top3_cols = st.columns(3)
+    for i, (_, row) in enumerate(summary.head(3).iterrows()):
+        gen   = int(row['generation'])
+        pid   = GEN_POKEMON.get(gen, 25)
+        medal = medals.get(i+1, '')
+        col_border = ['#FFD700','#C0C0C0','#CD7F32'][i]
+
+        with top3_cols[i]:
+            surl = sprite_url(pid, official=True)
+            st.markdown(
+                '<div style="background:#0f3460;border:2px solid ' + col_border + ';'
+                'border-radius:10px;padding:0.8rem;text-align:center;">'
+                '<p style="font-family:Press Start 2P;font-size:0.7rem;margin:0;">'
+                + medal + '</p>'
+                '<img src="' + surl + '" width="90" height="90" '
+                'style="object-fit:contain;" onerror="this.style.display=\'none\'">'
+                '<p style="font-family:Press Start 2P;font-size:0.5rem;'
+                'color:#FFCB05;margin:6px 0 2px;">GEN ' + str(gen) + '</p>'
+                '<p style="font-family:Press Start 2P;font-size:0.65rem;'
+                'color:' + col_border + ';margin:0;">'
+                + str(row['viable_pct']) + '% VIABLE</p>'
+                '<p style="font-family:Nunito;font-size:0.8rem;'
+                'color:#A0A0A0;margin:4px 0 0;">'
+                + str(int(row['viable'])) + ' viable of '
+                + str(int(row['tiered'])) + ' tiered</p>'
+                '</div>',
+                unsafe_allow_html=True)
+
+    divider()
+
+    # Full rankings chart
+    st.markdown(
+        '<p style="font-family:Press Start 2P;font-size:0.5rem;'
+        'color:#FFCB05;margin-bottom:0.5rem;">VIABLE % BY GENERATION</p>',
+        unsafe_allow_html=True)
+
+    fig_rank = px.bar(
+        summary,
+        x='generation', y='viable_pct',
+        color='viable_pct',
+        color_continuous_scale='YlOrRd',
+        title="% of Tiered Pokemon that Reached Viable Tiers (UU or above)",
+        labels={'viable_pct':'Viable %','generation':'Generation'},
+        text=summary['viable_pct'].astype(str) + '%',
+    )
+    fig_rank.update_traces(textposition='outside')
+    fig_rank.update_layout(
+        coloraxis_showscale=False,
+        xaxis=dict(tickmode='linear', dtick=1),
+    )
+    st.plotly_chart(tp(fig_rank, 420), use_container_width=True, key="rank_bar")
+
+    divider()
+
+    # Top tier count chart
+    st.markdown(
+        '<p style="font-family:Press Start 2P;font-size:0.5rem;'
+        'color:#FFCB05;margin-bottom:0.5rem;">TOP TIER POKEMON PER GENERATION</p>',
+        unsafe_allow_html=True)
+
+    fig_top = px.bar(
+        summary,
+        x='generation', y='top_tier',
+        color='top_tier',
+        color_continuous_scale='YlOrRd',
+        title="Number of Uber/OU/BL Pokemon Introduced per Generation",
+        labels={'top_tier':'Top Tier Count','generation':'Generation'},
+        text='top_tier',
+    )
+    fig_top.update_traces(textposition='outside')
+    fig_top.update_layout(
+        coloraxis_showscale=False,
+        xaxis=dict(tickmode='linear', dtick=1),
+    )
+    st.plotly_chart(tp(fig_top, 420), use_container_width=True, key="rank_top")
+
+    divider()
+
+    # Full table
+    st.markdown(
+        '<p style="font-family:Press Start 2P;font-size:0.5rem;'
+        'color:#FFCB05;margin-bottom:0.5rem;">FULL RANKINGS TABLE</p>',
+        unsafe_allow_html=True)
+
+    rows = ""
+    for _, row in summary.iterrows():
+        gen    = int(row['generation'])
+        rank   = int(row['rank'])
+        medal  = medals.get(rank, str(rank))
+        pid    = GEN_POKEMON.get(gen, 25)
+        pct    = row['viable_pct']
+        bar_w  = int(pct)
+        bar_c  = '#4CAF50' if pct >= 30 else ('#FFCB05' if pct >= 20 else '#F44336')
+        avg    = row['avg_bst_viable'] if str(row['avg_bst_viable']) != 'nan' else 'N/A'
+
+        rows += (
+            '<tr style="border-bottom:1px solid #1a1a2e;">'
+            '<td style="padding:6px;text-align:center;font-family:Press Start 2P;'
+            'font-size:0.5rem;">' + medal + '</td>'
+            '<td style="padding:6px;text-align:center;">'
+            + sprite_img(pid, 36) + '</td>'
+            '<td style="padding:6px;text-align:center;font-family:Press Start 2P;'
+            'font-size:0.5rem;color:#FFCB05;">GEN ' + str(gen) + '</td>'
+            '<td style="padding:6px;text-align:center;">' + str(int(row['total'])) + '</td>'
+            '<td style="padding:6px;text-align:center;">' + str(int(row['tiered'])) + '</td>'
+            '<td style="padding:6px;text-align:center;color:#F95587;">'
+            + str(int(row['top_tier'])) + '</td>'
+            '<td style="padding:6px;text-align:center;color:#4CAF50;">'
+            + str(int(row['viable'])) + '</td>'
+            '<td style="padding:6px;">'
+            '<div style="background:#1a1a2e;border-radius:4px;height:10px;">'
+            '<div style="background:' + bar_c + ';width:' + str(bar_w) + '%;'
+            'height:100%;border-radius:4px;"></div></div>'
+            '<span style="font-family:Nunito;font-size:0.75rem;color:#EAEAEA;">'
+            + str(pct) + '%</span></td>'
+            '<td style="padding:6px;text-align:center;font-family:Nunito;'
+            'font-size:0.8rem;">' + str(avg) + '</td>'
+            '</tr>'
+        )
+
+    headers = ['RANK','','GEN','TOTAL','TIERED','TOP TIER','VIABLE','VIABLE %','AVG BST']
+    ths = "".join(
+        '<th style="padding:7px;font-family:Press Start 2P;font-size:0.42rem;'
+        'color:#FFCB05;text-align:center;">' + h + '</th>'
+        for h in headers)
+
+    st.markdown(
+        '<table style="width:100%;border-collapse:collapse;background:#0f3460;'
+        'border-radius:8px;overflow:hidden;font-family:Nunito,sans-serif;color:#EAEAEA;">'
+        '<thead><tr style="background:#CC0000;">' + ths + '</tr></thead>'
+        '<tbody>' + rows + '</tbody></table>',
+        unsafe_allow_html=True)
+
+    # Caveat note
+    st.markdown(
+        '<div style="margin-top:1rem;border-left:3px solid #FFCB05;'
+        'background:#0f3460;padding:0.7rem 1rem;border-radius:0 6px 6px 0;">'
+        '<p style="font-family:Nunito;color:#A0A0A0;font-size:0.82rem;margin:0;">'
+        'Rankings based on Smogon tier data covering Gens 1-8. '
+        'Gen 9 excluded due to incomplete tier data. '
+        'Gen 8 ranking may be understated as its dataset has thinner coverage '
+        'than earlier generations.</p>'
+        '</div>',
+        unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()

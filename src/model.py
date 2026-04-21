@@ -162,3 +162,63 @@ def build_feature_row(
             featured[col] = 0
 
     return featured[feature_cols]
+
+TIER_MODEL_PATH = PROJECT_ROOT / "models" / "xgboost_tier_classifier.pkl"
+
+
+def load_tier_model() -> dict:
+    """
+    Load the multi-class tier classifier and metadata.
+
+    Returns dict with keys:
+        model: XGBClassifier
+        feature_cols: list
+        label_encoder: LabelEncoder
+        tier_order: list
+        exact_accuracy: float
+    """
+    if not TIER_MODEL_PATH.exists():
+        raise FileNotFoundError(
+            f"Tier model not found at {TIER_MODEL_PATH}. "
+            "Run the training notebook first."
+        )
+    with open(TIER_MODEL_PATH, 'rb') as f:
+        return pickle.load(f)
+
+
+def predict_tier(feature_row: pd.DataFrame,
+                 tier_model_data: dict | None = None) -> dict:
+    """
+    Predict competitive tier (Low/Mid/Top) for a single Pokemon.
+
+    Args:
+        feature_row: Single-row DataFrame with all feature columns.
+        tier_model_data: Output of load_tier_model(). Loads from disk if None.
+
+    Returns dict with keys:
+        tier: str ('Low Tier', 'Mid Tier', 'Top Tier')
+        probabilities: dict of {tier_name: probability}
+        accuracy_note: str disclaimer about model accuracy
+    """
+    if tier_model_data is None:
+        tier_model_data = load_tier_model()
+
+    model        = tier_model_data['model']
+    feature_cols = tier_model_data['feature_cols']
+    le           = tier_model_data['label_encoder']
+    tier_order   = tier_model_data['tier_order']
+
+    X = feature_row[feature_cols]
+
+    pred_class = model.predict(X)[0]
+    pred_probs = model.predict_proba(X)[0]
+
+    tier = le.inverse_transform([pred_class])[0]
+    probs = {tier_order[i]: round(float(pred_probs[i]) * 100, 1)
+             for i in range(len(tier_order))}
+
+    return {
+        'tier': tier,
+        'probabilities': probs,
+        'accuracy_note': 'Tier prediction accuracy: 58.3% on Gen 8 test set.',
+    }
