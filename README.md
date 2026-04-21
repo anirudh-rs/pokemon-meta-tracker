@@ -1,6 +1,6 @@
 # PokeMeta Analyser
 
-A machine learning and data analysis project that tracks how the Pokemon competitive meta has shifted across all nine generations. Identifies which types became dominant, how legendary introductions disrupted the balance, and predicts whether a custom Pokemon would be competitively viable based on its stats and typing.
+A machine learning and data analysis project tracking how the Pokemon competitive meta has shifted across all nine generations. Identifies type dominance shifts, legendary disruptions, and predicts competitive viability based on stats and typing.
 
 Built with Python, XGBoost, SHAP, Plotly, and Streamlit.
 
@@ -11,23 +11,21 @@ Built with Python, XGBoost, SHAP, Plotly, and Streamlit.
 
 ---
 
-## What It Does
+## Dashboard
 
-### Exploratory Analysis
-- BST distribution and power creep across generations
-- Type frequency evolution (including Fairy's Gen 6 disruption)
-- Legendary vs non-legendary stat gap over time
-- Stat profile distribution (Physical Sweeper, Special Wall, etc.)
-- Dual-type prevalence and offensive type coverage per generation
+Nine interactive tabs with a Pokemon-themed dark UI, sprite decorations, type badge icons, and Pokeball dividers.
 
-### Viability Classifier
-- XGBoost model trained on Smogon tier data from Gens 1-7
-- Validated on Gen 8 (ROC-AUC: 0.932, Accuracy: 86.6%)
-- SHAP explainability shows which stats drove each prediction
-- Custom Pokemon input: enter any stats and typing to get a viability prediction
-
-### Streamlit Dashboard
-Seven interactive tabs covering all of the above, with a Pokemon-themed dark UI, sprite decorations, and type badge icons.
+| Tab | Description |
+|---|---|
+| Home | Project overview, key findings, dashboard navigation guide |
+| Generations | Power creep, BST trends, legendary gap across all 9 generations |
+| Type Dominance | Type frequency shifts, Fairy disruption heatmap, type reference |
+| Legendary Impact | Traditional vs Mythical vs Ultra Beast vs Paradox category analysis |
+| Stat Profiles | Competitive role distribution, dual-type prevalence, offensive coverage |
+| Viability Predictor | Custom Pokemon input with SHAP explainability, tier prediction, and type matchup defender |
+| Model Insights | SHAP importance, confusion matrix, outlier spotlight |
+| Gen 9 Predictions | Model predictions for all 112 Scarlet and Violet Pokemon |
+| Power Rankings | Generations ranked by competitive contribution |
 
 ---
 
@@ -39,7 +37,54 @@ Seven interactive tabs covering all of the above, with a Pokemon-themed dark UI,
 | The legendary gap is closing | Peaked at 253 BST points in Gen 6, now just 116 in Gen 9 |
 | Fairy disrupted everything | Went from 1.3% of Gen 5 to 17.6% of Gen 6 in one generation |
 | Speed matters most after BST | Speed is the 2nd most important SHAP feature for viability |
-| Legendary status does not predict viability | Stats do - is_legendary does not appear in the top 20 SHAP features |
+| Gen 6 produced the best competitive Pokemon | 37.2% of its tiered Pokemon reached viable tiers |
+| The model is blind to abilities | 30 overrated Pokemon have great stats but crippling abilities like Truant and Slow Start |
+| Gen 9 looks strong | 43 of 112 Gen 9 Pokemon predicted viable, with Iron Moth and Iron Valiant at 99%+ |
+
+---
+
+## Models
+
+### Binary Viability Classifier
+
+Predicts whether a Pokemon would be competitively viable (Uber/OU/UU or above).
+
+| Property | Value |
+|---|---|
+| Algorithm | XGBoost Classifier |
+| Training data | Gens 1-7, 524 tiered Pokemon |
+| Test data | Gen 8, 82 Pokemon (held out entirely during training) |
+| Viability definition | Smogon tier Uber, OU, UU, or BL |
+| Decision threshold | 0.35 (optimised for viable class F1) |
+| ROC-AUC | 0.932 |
+| Accuracy | 86.6% |
+| Viable class F1 | 0.625 |
+
+### 3-Class Tier Classifier
+
+Predicts whether a Pokemon would land in Top Tier (Uber/OU), Mid Tier (UU/RU), or Low Tier (NU/PU).
+
+| Property | Value |
+|---|---|
+| Algorithm | XGBoost Multi-class Classifier |
+| Classes | Top Tier, Mid Tier, Low Tier |
+| Training data | Gens 1-7, 464 tiered Pokemon (ZU excluded) |
+| Test data | Gen 8, 24 Pokemon |
+| Exact accuracy | 58.3% |
+| Objective | multi:softmax |
+
+### Top SHAP Features (Binary Model)
+
+1. BST - by far the strongest predictor
+2. Speed - more important than any individual offensive stat
+3. Offensive total (Attack + Sp.Atk + Speed)
+4. HP
+5. Defensive total (HP + Defense + Sp.Def)
+6. Number of types (dual-typing helps viability)
+7. Attack
+8. Has type Steel (positive effect)
+9. Has type Rock (negative effect)
+10. Has type Fairy (positive effect)
 
 ---
 
@@ -48,29 +93,29 @@ Seven interactive tabs covering all of the above, with a Pokemon-themed dark UI,
 ```
 pokemon-meta-tracker/
 ├── data/
-│   ├── raw/                        # Source CSVs (not committed - see Data Sources)
-│   │   ├── pokemon.csv             # Main Pokemon dataset (Kaggle)
-│   │   ├── smogon.csv              # Smogon tiers Gens 1-6
-│   │   └── pokemon_data.csv        # Extended tiers Gens 7-8
-│   └── processed/                  # Derived parquet files (regenerated by pipeline)
+│   ├── raw/                             # Source CSVs (not committed - see Data Sources)
+│   │   ├── pokemon.csv                  # Main Pokemon dataset (Kaggle)
+│   │   ├── smogon.csv                   # Smogon tiers Gens 1-6
+│   │   └── pokemon_data.csv             # Extended tiers Gens 7-8
+│   └── processed/                       # Derived parquet files (regenerated by pipeline)
 │       ├── pokemon_clean.parquet
 │       ├── pokemon_featured.parquet
 │       └── pokemon_with_tiers.parquet
 ├── notebooks/
-│   └── 02_eda_generations.ipynb    # Full EDA notebook
+│   └── 02_eda_generations.ipynb         # Full EDA and model training notebook
 ├── src/
 │   ├── __init__.py
-│   ├── data_loader.py              # Loads, cleans, and classifies Pokemon data
-│   ├── feature_engineering.py      # Stat ratios, type encoding, derived features
-│   ├── model.py                    # XGBoost training, prediction, SHAP utilities
-│   └── visualisations.py           # Reusable Plotly chart functions
+│   ├── data_loader.py                   # Loads, cleans, classifies Pokemon data
+│   ├── feature_engineering.py           # Stat ratios, type encoding, derived features
+│   ├── model.py                         # XGBoost training, prediction, SHAP utilities
+│   └── visualisations.py                # Eight reusable Plotly chart functions
 ├── models/
-│   ├── xgboost_viability.pkl       # Trained model artifact (not committed)
-│   └── shap_summary.png            # Global SHAP feature importance plot
+│   ├── xgboost_viability.pkl            # Binary viability model (not committed)
+│   ├── xgboost_tier_classifier.pkl      # 3-class tier model (not committed)
+│   └── shap_summary.png                 # Global SHAP feature importance plot
 ├── app/
-│   └── streamlit_app.py            # Seven-tab Streamlit dashboard
-├── pyproject.toml                  # Editable install config
-├── environment.yml                 # Conda environment spec
+│   └── streamlit_app.py                 # Nine-tab Streamlit dashboard
+├── pyproject.toml                       # Editable install config
 └── README.md
 ```
 
@@ -81,7 +126,7 @@ pokemon-meta-tracker/
 ### 1. Clone and create environment
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/YOUR_USERNAME/pokemon-meta-tracker.git
 cd pokemon-meta-tracker
 
 conda create -n pokemon-meta python=3.11 -y
@@ -113,22 +158,24 @@ Download these CSV files and place them in `data/raw/`:
 
 | File | Source | Description |
 |---|---|---|
-| `pokemon.csv` | [Kaggle - Pokemon Dataset](https://www.kaggle.com) | 1,194 Pokemon, all 9 generations, base stats and typing |
-| `smogon.csv` | [Kaggle - Smogon Tiers](https://www.kaggle.com) | Smogon competitive tiers, Gens 1-6, with BL granularity |
-| `pokemon_data.csv` | [Kaggle - Competitive Pokemon](https://www.kaggle.com) | Extended tier data covering Gens 7-8 |
+| `pokemon.csv` | Kaggle - Pokemon Dataset | 1,194 Pokemon, all 9 generations, base stats and typing |
+| `smogon.csv` | Kaggle - Smogon Tiers | Smogon competitive tiers, Gens 1-6, with BL granularity |
+| `pokemon_data.csv` | Kaggle - Competitive Pokemon | Extended tier data covering Gens 7-8 |
 
 ---
 
 ## Running the Project
 
-### Generate processed data and train the model
+### Generate processed data and train both models
 
 Open `notebooks/02_eda_generations.ipynb` in Jupyter and run all cells. This will:
-- Clean and feature-engineer the raw data
-- Run exploratory analysis
-- Train the XGBoost classifier
-- Save the model to `models/xgboost_viability.pkl`
-- Save the SHAP summary plot to `models/shap_summary.png`
+
+- Clean and feature-engineer the raw data into parquet files
+- Run the full exploratory analysis
+- Train the binary XGBoost viability classifier
+- Train the 3-class tier classifier
+- Save both models to `models/`
+- Save the SHAP summary plot
 
 ```bash
 jupyter notebook
@@ -140,37 +187,49 @@ jupyter notebook
 streamlit run app/streamlit_app.py
 ```
 
-The dashboard opens at `http://localhost:8501`.
+Opens at `http://localhost:8501`.
 
 ---
 
-## Model Details
+## Feature Details
 
-| Property | Value |
-|---|---|
-| Algorithm | XGBoost Classifier |
-| Training data | Gens 1-7, 524 tiered Pokemon |
-| Test data | Gen 8, 82 Pokemon (held out entirely during training) |
-| Viability definition | Smogon tier Uber, OU, UU, or BL |
-| Class balance | 30% viable / 70% non-viable |
-| scale_pos_weight | 2.34 (handles imbalance) |
-| Decision threshold | 0.35 (optimised for viable class F1) |
-| ROC-AUC | 0.932 |
-| Accuracy | 86.6% |
-| Viable class F1 | 0.625 |
+### Viability Predictor
+Input any combination of HP, Attack, Defense, Sp. Atk, Sp. Def, Speed, primary type, secondary type, legendary status, height, and weight. The model returns:
+- Binary verdict (Competitively Viable / Not Viable) with probability
+- SHAP waterfall chart explaining which stats drove the prediction
+- Predicted tier (Top/Mid/Low) with class probabilities
+- 10 most similar real Pokemon by BST
+- Type Matchup Defender popup showing weaknesses and top counters
 
-### Top SHAP Features
+### Gen 9 Inference
+The binary model was trained on Gens 1-7 and validated on Gen 8. It has never seen Gen 9 data. The Gen 9 tab runs predictions on all 112 Scarlet and Violet base form Pokemon purely from their stats and typing - a genuine test of whether the model has learned real competitive patterns.
 
-1. BST (base stat total) - by far the strongest predictor
-2. Speed - more important than any individual offensive stat
-3. Offensive total (Attack + Sp.Atk + Speed)
-4. HP
-5. Defensive total (HP + Defense + Sp.Def)
-6. Number of types (dual-typing helps viability)
-7. Attack
-8. Defense
-9. Has type Steel (positive)
-10. Has type Rock (negative)
+### Outlier Spotlight
+Surfaces Pokemon where the model strongly disagrees with Smogon:
+- Overrated (30 Pokemon) - good stats but crippling abilities the model cannot see
+- Underrated (1 Pokemon, Dracozolt) - weak stats but broken ability-move combination
+
+### Power Rankings
+Ranks all 8 generations (Gen 9 excluded due to incomplete tier data) by the percentage of their tiered Pokemon that reached viable tiers (UU or above). Gen 6 leads at 37.2% despite being the smallest generation.
+
+---
+
+## Limitations
+
+- Smogon tier data does not cover Gen 9
+- The model uses only base stats and typing - abilities, movepool, and Speed tier interactions are not captured
+- Viability is defined using a single Smogon format (OU singles) - VGC doubles viability would require a different dataset
+- Gen 8 Power Ranking may be understated due to thinner tier dataset coverage
+- 3-class tier classifier accuracy (58.3%) reflects the genuine fuzziness of tier boundaries
+
+---
+
+## Planned Extensions
+
+- Pokemon Comparison Tool - side-by-side stat radar charts with SHAP comparison
+- Meta Timeline Simulator - lock dashboard to show meta at a specific generation
+- BST Budget Optimiser - find optimal stat distribution for a given BST total and typing
+- Head-to-Head Matchup - compare two Pokemon with SHAP side by side
 
 ---
 
@@ -181,20 +240,11 @@ The dashboard opens at `http://localhost:8501`.
 | Python 3.11 | Core language |
 | pandas, numpy | Data manipulation |
 | scikit-learn | Preprocessing and evaluation |
-| XGBoost | Classification model |
+| XGBoost | Classification models |
 | SHAP | Model explainability |
 | Plotly | Interactive visualisations |
 | Streamlit | Dashboard framework |
 | pyarrow | Parquet file I/O |
-
----
-
-## Limitations
-
-- Smogon tier data does not cover Gen 9 - Gen 9 Pokemon are untiered
-- The model uses only base stats and typing - abilities, movepool, and Speed tier interactions are not captured
-- Viability is defined using a single Smogon format (OU singles) - VGC doubles viability would require a different dataset
-- Some alternate forms (Mega Evolutions, regional variants) are excluded from modelling
 
 ---
 
