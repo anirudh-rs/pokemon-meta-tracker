@@ -7,13 +7,6 @@ __pycache__/
 .env
 *.egg-info/
 
-# Data — keep raw data local, don't commit large CSVs
-data/raw/*.csv
-data/processed/*.parquet
-
-# Models — regenerable, skip
-models/*.pkl
-
 # IDE
 .vscode/
 .idea/
