@@ -1116,7 +1116,7 @@ def main():
     inject_css()
 
     bulbasaur_url = sprite_url(1, official=True)
-    miraidon_url  = sprite_url(1010, official=True)
+    miraidon_url  = sprite_url(1008, official=True)
     lightning     = '<span style="color:#FFCB05;font-size:1.1rem;">&#9889;</span>'
 
     st.markdown(
