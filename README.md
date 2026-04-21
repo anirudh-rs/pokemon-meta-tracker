@@ -224,15 +224,6 @@ Ranks all 8 generations (Gen 9 excluded due to incomplete tier data) by the perc
 
 ---
 
-## Planned Extensions
-
-- Pokemon Comparison Tool - side-by-side stat radar charts with SHAP comparison
-- Meta Timeline Simulator - lock dashboard to show meta at a specific generation
-- BST Budget Optimiser - find optimal stat distribution for a given BST total and typing
-- Head-to-Head Matchup - compare two Pokemon with SHAP side by side
-
----
-
 ## Tech Stack
 
 | Tool | Purpose |
@@ -245,15 +236,3 @@ Ranks all 8 generations (Gen 9 excluded due to incomplete tier data) by the perc
 | Plotly | Interactive visualisations |
 | Streamlit | Dashboard framework |
 | pyarrow | Parquet file I/O |
-
----
-
-## Previous Projects
-
-This project is part of a series of hobby data science builds:
-
-- RAG-Based Document Assistant (LangChain, ChromaDB, Streamlit)
-- AI Stem Separation and Remix Tool (Demucs, Streamlit)
-- Employee Attrition and HR Analytics Dashboard (XGBoost, SHAP, Streamlit)
-- Retail Customer Segmentation (K-Means, RFM, Streamlit)
-- Flight Delay Prediction System (XGBoost, SHAP, PostgreSQL, Streamlit)
