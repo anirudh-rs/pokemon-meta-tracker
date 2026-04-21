@@ -27,7 +27,7 @@ from src.model import load_model, load_tier_model, predict_viability, predict_ti
 # -- Page config ---------------------------------------------------------------
 st.set_page_config(
     page_title="PokeMeta Analyser",
-    page_icon="~",
+    page_icon="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/master-ball.png",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -1115,10 +1115,36 @@ def tab_model(df, df_t, model_data):
 def main():
     inject_css()
 
+    bulbasaur_url = sprite_url(1, official=True)
+    miraidon_url  = sprite_url(1010, official=True)
+    lightning     = '<span style="color:#FFCB05;font-size:1.1rem;">&#9889;</span>'
+
     st.markdown(
-        '<div style="text-align:center;padding:0.4rem 0 0.42rem;">'
-        '<h1 style="font-size:0.95rem !important;">~ POKEMETA ANALYSER ~</h1>'
-        '<p style="font-family:Nunito;color:#A0A0A0;font-size:0.85rem;margin-top:-0.42rem;">'
+        '<div style="text-align:center;padding:0.4rem 0 0.3rem;">'
+
+        # Sprite + title row
+        '<div style="display:flex;align-items:center;justify-content:center;gap:0.8rem;">'
+
+        # Left — Bulbasaur
+        '<img src="' + bulbasaur_url + '" '
+        'style="width:60px;height:60px;object-fit:contain;'
+        'filter:drop-shadow(0 0 6px rgba(124,199,76,0.6));" '
+        'onerror="this.style.display:\'none\'">'
+
+        # Title
+        '<h1 style="font-size:0.95rem !important;margin:0;">'
+        + lightning + ' POKEMETA ANALYSER ' + lightning +
+        '</h1>'
+
+        # Right — Miraidon
+        '<img src="' + miraidon_url + '" '
+        'style="width:60px;height:60px;object-fit:contain;'
+        'filter:drop-shadow(0 0 6px rgba(99,144,240,0.6));" '
+        'onerror="this.style.display:\'none\'">'
+
+        '</div>'
+
+        '<p style="font-family:Nunito;color:#A0A0A0;font-size:0.85rem;margin-top:0.2rem;">'
         'Competitive Meta Shift Tracker - Gens 1 to 9</p>'
         '</div>',
         unsafe_allow_html=True)
