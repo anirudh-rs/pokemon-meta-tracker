@@ -1138,7 +1138,7 @@ def main():
 
         # Right — Miraidon
         '<img src="' + miraidon_url + '" '
-        'style="width:60px;height:60px;object-fit:contain;'
+        'style="width:80px;height:80px;object-fit:contain;'
         'filter:drop-shadow(0 0 6px rgba(99,144,240,0.6));" '
         'onerror="this.style.display:\'none\'">'
 
