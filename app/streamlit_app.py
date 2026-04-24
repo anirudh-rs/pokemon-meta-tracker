@@ -210,7 +210,7 @@ def tp(fig, h=450):
     return fig
 
 # -- Section header ------------------------------------------------------------
-def sh(title, sub="", pid=None):
+def sh(title, sub="", pid=None, pid2=None):
     if pid:
         c1, c2 = st.columns([5, 1])
         with c1:
@@ -220,9 +220,18 @@ def sh(title, sub="", pid=None):
                     "<p style='color:#A0A0A0;font-size:0.85rem;margin-top:-0.4rem;'>" + sub + "</p>",
                     unsafe_allow_html=True)
         with c2:
-            st.markdown(
-                '<div style="text-align:right;margin-top:-0.4rem;">' + sprite_img(pid, 64) + '</div>',
-                unsafe_allow_html=True)
+            if pid2:
+                st.markdown(
+                    '<div style="text-align:right;margin-top:-0.4rem;display:flex;gap:4px;justify-content:flex-end;">'
+                    + sprite_img(pid, 48) + sprite_img(pid2, 48) +
+                    '</div>',
+                    unsafe_allow_html=True)
+            else:
+                st.markdown(
+                    '<div style="text-align:right;margin-top:-0.4rem;">'
+                    + sprite_img(pid, 64) +
+                    '</div>',
+                    unsafe_allow_html=True)
     else:
         st.markdown("### " + title)
         if sub:
@@ -233,7 +242,7 @@ def sh(title, sub="", pid=None):
 
 # -- TAB 1: HOME ---------------------------------------------------------------
 def tab_home(df, df_t):
-    sh("POKEMETA ANALYSER", "Competitive meta shifts across all 9 generations")
+    sh("POKEMETA ANALYSER", "Competitive meta shifts across all 9 generations", pid=25)
 
     # Key stats
     c1, c2, c3, c4 = st.columns(4)
@@ -355,7 +364,7 @@ def tab_home(df, df_t):
                 unsafe_allow_html=True)
 # -- TAB 2: GENERATION OVERVIEW ------------------------------------------------
 def tab_generations(df):
-    sh("GENERATION OVERVIEW", "How has Pokemon power evolved across generations?", pid=6)
+    sh("GENERATION OVERVIEW", "How has Pokemon power evolved across generations?", pid=172)
 
     c1, c2 = st.columns(2)
     with c1:
@@ -420,7 +429,7 @@ def tab_generations(df):
 
 # -- TAB 3: TYPE DOMINANCE -----------------------------------------------------
 def tab_types(df):
-    sh("TYPE DOMINANCE", "How has type composition shifted across generations?", pid=130)
+    sh("TYPE DOMINANCE", "How has type composition shifted across generations?", pid=311, pid2=312)
 
     c1, c2 = st.columns(2)
     with c1:
@@ -457,7 +466,7 @@ def tab_types(df):
 # -- TAB 4: LEGENDARY IMPACT ---------------------------------------------------
 def tab_legendary(df):
     sh("LEGENDARY IMPACT",
-       "How have legendary Pokemon disrupted competitive balance?", pid=150)
+       "How have legendary Pokemon disrupted competitive balance?", pid=417)
 
     db = df[df['form_type'] == 'Base'].copy()
     c1, c2 = st.columns(2)
@@ -492,7 +501,7 @@ def tab_legendary(df):
 # -- TAB 5: STAT PROFILES ------------------------------------------------------
 def tab_profiles(df):
     sh("STAT PROFILES",
-       "Are modern Pokemon more specialised than earlier generations?", pid=445)
+       "Are modern Pokemon more specialised than earlier generations?", pid=587)
 
     c1, c2 = st.columns(2)
     with c1:
@@ -923,7 +932,7 @@ def recommend_nature(hp, attack, defense, sp_attack, sp_defense, speed,
 
 def tab_predictor(df, df_t, model_data, tier_model_data):
     sh("VIABILITY PREDICTOR",
-       "Design a Pokemon and see if it would be competitively viable", pid=778)
+       "Design a Pokemon and see if it would be competitively viable", pid=702)
 
     TYPES = [
         "Normal","Fire","Water","Electric","Grass","Ice","Fighting","Poison",
@@ -1684,7 +1693,7 @@ def tab_predictor(df, df_t, model_data, tier_model_data):
 
 # -- TAB 7: MODEL INSIGHTS -----------------------------------------------------
 def tab_model(df, df_t, model_data):
-    sh("MODEL INSIGHTS", "How does the XGBoost viability classifier work?", pid=248)
+    sh("MODEL INSIGHTS", "How does the XGBoost viability classifier work?", pid=777)
     import shap
     mdl, fc = model_data['model'], model_data['feature_cols']
 
@@ -1943,7 +1952,7 @@ def main():
         "HOME", "GENERATIONS", "TYPE DOMINANCE",
         "LEGENDARY IMPACT", "STAT PROFILES",
         "VIABILITY PREDICTOR", "MODEL INSIGHTS",
-        "GEN 9 PREDICTIONS", "POWER RANKINGS",
+        "POWER RANKINGS", "GEN 9 PREDICTIONS",
     ])
 
     with tabs[0]: tab_home(df, df_t)
@@ -1953,13 +1962,13 @@ def main():
     with tabs[4]: tab_profiles(df)
     with tabs[5]: tab_predictor(df, df_t, md, td)
     with tabs[6]: tab_model(df, df_t, md)
-    with tabs[7]: tab_gen9(df, md)
-    with tabs[8]: tab_rankings(df, df_t)
+    with tabs[7]: tab_rankings(df, df_t)
+    with tabs[8]: tab_gen9(df, md)
 
 def tab_gen9(df, model_data):
     sh("GEN 9 PREDICTIONS",
        "Model predictions for Scarlet and Violet - no official Smogon tiers yet",
-       pid=995)
+       pid=921)
 
     # Run predictions
     model        = model_data['model']
@@ -2098,7 +2107,7 @@ def tab_gen9(df, model_data):
 def tab_rankings(df, df_t):
     sh("GENERATION POWER RANKINGS",
        "Which generation produced the most competitively relevant Pokemon?",
-       pid=445)
+       pid=877)
 
     # Build rankings data
     base = df_t[
