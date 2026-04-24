@@ -23,7 +23,7 @@ Nine interactive tabs with a Pokemon-themed dark UI, sprite decorations, type ba
 | Type Dominance | Type frequency shifts, Fairy disruption heatmap, type reference |
 | Legendary Impact | Traditional vs Mythical vs Ultra Beast vs Paradox category analysis |
 | Stat Profiles | Competitive role distribution, dual-type prevalence, offensive coverage |
-| Viability Predictor | Custom Pokemon input with ability dropdown, SHAP explainability, tier prediction, and type matchup defender |
+| Viability Predictor | Custom Pokemon input with ability, nature, speed tier tools, SHAP explainability, tier prediction, and type matchup defender |
 | Model Insights | SHAP importance, confusion matrix, outlier spotlight |
 | Gen 9 Predictions | Model predictions for all 112 Scarlet and Violet Pokemon |
 | Power Rankings | Generations ranked by competitive contribution |
@@ -174,7 +174,7 @@ Download these CSV files and place them in `data/raw/`:
 | `smogon.csv` | Kaggle - Smogon Tiers | Smogon competitive tiers, Gens 1-6 |
 | `pokemon_data.csv` | Kaggle - Competitive Pokemon | Extended tier data covering Gens 7-8 |
 
-Ability data is fetched automatically from PokeAPI during the notebook run — no manual download needed.
+Ability data is fetched automatically from PokeAPI during the notebook run.
 
 ---
 
@@ -182,16 +182,9 @@ Ability data is fetched automatically from PokeAPI during the notebook run — n
 
 ### Generate processed data and train both models
 
-Open `notebooks/02_eda_generations.ipynb` in Jupyter and run all cells. Then open `notebooks/03_ability_features.ipynb` and run all cells. This will:
-
-- Clean and feature-engineer the raw data into parquet files
-- Fetch ability data from PokeAPI for all 1,025 base form Pokemon
-- Score abilities by competitive impact (-3 to +5)
-- Run the full exploratory analysis
-- Train the binary XGBoost viability classifier with ability features
-- Train the 3-class tier classifier
-- Save both models to `models/`
-- Save the SHAP summary plot
+Open and run all cells in order:
+1. `notebooks/02_eda_generations.ipynb` - EDA, feature engineering, model training
+2. `notebooks/03_ability_features.ipynb` - Ability scoring and model retraining
 
 ```bash
 jupyter notebook
@@ -223,13 +216,16 @@ Abilities are scored from -3 to +5 based on competitive impact:
 | -2 to -3 | Crippling | Truant, Slow Start, Defeatist, Klutz, Stall |
 
 ### Viability Predictor
-Input any combination of stats, typing, and ability. The model returns:
-- Binary verdict (Competitively Viable / Not Viable) with probability
-- SHAP waterfall chart explaining which stats drove the prediction
-- Predicted tier (Top/Mid/Low) with class probabilities
-- 10 most similar real Pokemon by BST
-- Type Matchup Defender popup showing weaknesses, resistances, and ability-granted immunities
-- Top 5 counters per weakness type
+
+A complete competitive analysis tool for any custom Pokemon. Input stats, typing, ability, and the predictor returns:
+
+- **Viability verdict** - Competitively Viable / Not Viable with probability score
+- **SHAP waterfall chart** - which stats drove the prediction and by how much
+- **Tier prediction** - Top/Mid/Low Tier with class probabilities and accuracy disclaimer
+- **Nature recommender** - optimal nature based on stat spread, with ability interaction (Speed Boost overrides speed-based natures, weather speed abilities change recommendations)
+- **Speed tier calculator** - shows which competitive Pokemon you outspeed, tie, or get outsped by, adjusted for nature (+/-10%) and ability (weather speed doubles, Speed Boost noted separately)
+- **SEE WHAT BEATS IT popup** - full defensive type chart with ability-granted immunities (Levitate removes Ground weakness, Flash Fire removes Fire weakness etc.), plus top 5 counters per weakness type
+- **10 most similar Pokemon** by BST
 
 ### Gen 9 Inference
 The binary model was trained on Gens 1-7 and validated on Gen 8. It has never seen Gen 9 data. The Gen 9 tab runs predictions on all 112 Scarlet and Violet base form Pokemon purely from their stats, typing and ability scores.
@@ -249,6 +245,7 @@ Ranks all 8 generations by the percentage of their tiered Pokemon that reached v
 - Smogon tier data does not cover Gen 9
 - The model uses base stats, typing and ability scores - movepool and EV spreads are not captured
 - Ability scores are manually curated - some niche abilities may be under or over-valued
+- Nature and speed tier tools are informational only - they do not affect the viability model prediction
 - Viability is defined using Smogon OU singles - VGC doubles would require different data
 - Gen 8 Power Ranking may be understated due to thinner tier dataset coverage
 - 3-class tier classifier accuracy (58.3%) reflects the genuine fuzziness of tier boundaries
@@ -257,14 +254,13 @@ Ranks all 8 generations by the percentage of their tiered Pokemon that reached v
 
 ## Planned Extensions
 
-- Nature recommender - suggest optimal nature for a given stat spread
-- Speed tier calculator - show which Pokemon a given Speed stat outspeeds
 - Smogon set display - show recommended competitive set for any real Pokemon
 - Moveset coverage analyser - given 4 moves, calculate total type coverage
 - Pokemon Comparison Tool - side-by-side stat radar charts with SHAP comparison
 - BST Budget Optimiser - find optimal stat distribution for a given BST total
 - Head-to-Head Matchup - compare two Pokemon with SHAP side by side
 - VGC vs Smogon comparison tab
+- Counter finder and team synergy analyser (Phase C/D)
 
 ---
 
@@ -281,3 +277,15 @@ Ranks all 8 generations by the percentage of their tiered Pokemon that reached v
 | Streamlit | Dashboard framework |
 | pyarrow | Parquet file I/O |
 | PokeAPI | Ability data source |
+
+---
+
+## Previous Projects
+
+This project is part of a series of hobby data science builds:
+
+- RAG-Based Document Assistant (LangChain, ChromaDB, Streamlit)
+- AI Stem Separation and Remix Tool (Demucs, Streamlit)
+- Employee Attrition and HR Analytics Dashboard (XGBoost, SHAP, Streamlit)
+- Retail Customer Segmentation (K-Means, RFM, Streamlit)
+- Flight Delay Prediction System (XGBoost, SHAP, PostgreSQL, Streamlit)
