@@ -2015,10 +2015,10 @@ def tab_gen9(df, model_data):
         'padding:0.8rem 1rem;border-radius:0 6px 6px 0;margin:0.8rem 0;">'
         '<p style="font-family:Nunito;color:#FFCB05;font-weight:700;margin:0 0 4px;">NOTE</p>'
         '<p style="font-family:Nunito;color:#A0A0A0;font-size:0.85rem;margin:0;">'
-        'These are model predictions based on base stats and typing only. '
+        'These are model predictions based on base stats, typing, and ability scores. '
         'No official Smogon Gen 9 tier data was used. '
-        'The model was trained on Gens 1-7 and validated on Gen 8. '
-        'Abilities, movepool, and Speed tier interactions are not captured.</p>'
+        'The model was trained on Gens 1-7 and validated on Gen 8 (ROC-AUC 0.9452). '
+        'Movepool and EV spreads are not captured.</p>'
         '</div>',
         unsafe_allow_html=True)
 
