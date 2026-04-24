@@ -277,15 +277,3 @@ Ranks all 8 generations by the percentage of their tiered Pokemon that reached v
 | Streamlit | Dashboard framework |
 | pyarrow | Parquet file I/O |
 | PokeAPI | Ability data source |
-
----
-
-## Previous Projects
-
-This project is part of a series of hobby data science builds:
-
-- RAG-Based Document Assistant (LangChain, ChromaDB, Streamlit)
-- AI Stem Separation and Remix Tool (Demucs, Streamlit)
-- Employee Attrition and HR Analytics Dashboard (XGBoost, SHAP, Streamlit)
-- Retail Customer Segmentation (K-Means, RFM, Streamlit)
-- Flight Delay Prediction System (XGBoost, SHAP, PostgreSQL, Streamlit)
