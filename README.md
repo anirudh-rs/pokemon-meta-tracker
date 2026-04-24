@@ -5,7 +5,6 @@ A machine learning and data analysis project tracking how the Pokemon competitiv
 Built with Python, XGBoost, SHAP, Plotly, and Streamlit.
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
-![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-red)
 ![XGBoost](https://img.shields.io/badge/Model-XGBoost-orange)
 ![ROC-AUC](https://img.shields.io/badge/ROC--AUC-0.9452-green)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-FF4B4B)](https://pokemon-meta-tracker.streamlit.app/)
