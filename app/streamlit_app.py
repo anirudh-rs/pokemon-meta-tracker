@@ -258,7 +258,7 @@ def tab_home(df, df_t):
             "<li><strong style='color:#FFCB05'>Exploratory Analysis</strong> - Power creep, type "
             "dominance shifts, legendary impact, stat profiles across all 9 generations</li>"
             "<li><strong style='color:#FFCB05'>Viability Classifier</strong> - XGBoost model trained "
-            "on Smogon tiers from Gens 1-7, validated on Gen 8, ROC-AUC 0.932</li>"
+            "on Smogon tiers from Gens 1-7, validated on Gen 8, ROC-AUC 0.9452</li>"
             "<li><strong style='color:#FFCB05'>Tier Classifier</strong> - 3-class model predicting "
             "Top, Mid or Low tier with 58.3% accuracy</li>"
             "<li><strong style='color:#FFCB05'>Gen 9 Inference</strong> - Model predictions for 112 "
@@ -278,7 +278,7 @@ def tab_home(df, df_t):
             'style="width:200px;height:200px;object-fit:contain;'
             'filter:drop-shadow(0 0 18px rgba(204,0,0,0.6));'
             'animation:float 3s ease-in-out infinite;" '
-            'onerror="this.style.display:\'none\'">'
+            'onerror="this.style.display=\'none\'">'
             '</div>',
             unsafe_allow_html=True)
 
@@ -290,7 +290,7 @@ def tab_home(df, df_t):
             ("⚡", "Speed Dominates",    "2nd most important SHAP feature after BST"),
             ("🏆", "Gen 6 Leads",        "37.2% of Gen 6 Pokemon are competitively viable"),
             ("🤖", "Gen 9 Predicted",    "43 of 112 Gen 9 Pokemon predicted viable by the model"),
-            ("🔍", "Model Blind Spot",   "30 overrated Pokemon - good stats, crippling abilities"),
+            ("🔍", "Model Blind Spot",   "27 overrated Pokemon - stats look strong, abilities let them down"),
         ]:
             st.markdown(
                 '<div style="background:#0f3460;border-left:3px solid #CC0000;'
@@ -341,7 +341,7 @@ def tab_home(df, df_t):
     for col, (t, b) in zip(st.columns(3), [
         ("Pokemon Dataset",   "1,194 Pokemon across all 9 gens<br>Base stats, types, forms"),
         ("Smogon Tiers",      "606 tiered Pokemon across Gens 1-8<br>OU, UU, Uber, RU, NU, PU"),
-        ("XGBoost Models",    "Binary: ROC-AUC 0.932<br>Tier classifier: 58.3% accuracy"),
+        ("XGBoost Models",    "Binary: ROC-AUC 0.9452<br>Tier classifier: 58.3% accuracy"),
     ]):
         with col:
             st.markdown(
@@ -553,26 +553,62 @@ def compute_defensive_matchups(type_1, type_2="None"):
             result[atk] = final
     return result
 
-@st.dialog("SEE WHAT BEATS ME", width="large")
-def show_type_matchup_dialog(type_1, type_2, df):
-    """Modal dialog showing defensive matchups and top counters."""
+# Abilities that grant immunity to a specific type
+ABILITY_IMMUNITIES = {
+    'Levitate':     'Ground',
+    'Flash Fire':   'Fire',
+    'Water Absorb': 'Water',
+    'Volt Absorb':  'Electric',
+    'Storm Drain':  'Water',
+    'Lightning Rod':'Electric',
+    'Sap Sipper':   'Grass',
+    'Motor Drive':  'Electric',
+    'Dry Skin':     'Water',
+    'Earth Eater':    'Ground',
+    'Well-Baked Body':'Fire',
+    'Wonder Guard': None,  # special case - handled separately
+}
 
+@st.dialog("WHAT BEATS IT!!", width="large")
+def show_type_matchup_dialog(type_1, type_2, df, ability='Unknown'):
     t2_display = " / " + type_2 if type_2 != "None" else ""
+    ab_display = (" + " + ability) if ability and ability != 'Unknown' else ""
+
     st.markdown(
         '<p style="font-family:Press Start 2P;font-size:0.5rem;color:#FFCB05;">'
-        'DEFENSIVE PROFILE: ' + type_1.upper() + t2_display.upper() + '</p>',
+        'DEFENSIVE PROFILE: ' + type_1.upper() + t2_display.upper() + ab_display.upper() + '</p>',
         unsafe_allow_html=True)
 
     matchups = compute_defensive_matchups(type_1, type_2)
 
-    # Sort into categories
-    weak4x   = {t:m for t,m in matchups.items() if m == 4}
-    weak2x   = {t:m for t,m in matchups.items() if m == 2}
-    resist2x = {t:m for t,m in matchups.items() if m == 0.5}
-    resist4x = {t:m for t,m in matchups.items() if m == 0.25}
-    immune   = {t:m for t,m in matchups.items() if m == 0}
+    # Apply ability immunity override
+    immune_type = ABILITY_IMMUNITIES.get(ability)
+    if immune_type and immune_type in matchups:
+        del matchups[immune_type]
 
-    # Matchup summary badges
+    # Show ability immunity note if applicable
+    if immune_type:
+        tc = TYPE_COLOURS.get(immune_type, "#888")
+        st.markdown(
+            '<div style="background:#1b5e20;border-left:3px solid #4CAF50;'
+            'padding:0.5rem 0.8rem;border-radius:0 6px 6px 0;margin-bottom:0.8rem;">'
+            '<p style="font-family:Press Start 2P;font-size:0.42rem;'
+            'color:#4CAF50;margin:0 0 3px;">ABILITY IMMUNITY</p>'
+            '<p style="font-family:Nunito;font-size:0.82rem;color:#EAEAEA;margin:0;">'
+            + ability + ' grants immunity to '
+            '<span style="background:' + tc + ';color:white;padding:1px 8px;'
+            'border-radius:8px;font-weight:700;">' + immune_type + '</span>'
+            ' — removing it from weaknesses.</p>'
+            '</div>',
+            unsafe_allow_html=True)
+
+    # Sort into categories
+    weak4x   = {t: m for t, m in matchups.items() if m == 4}
+    weak2x   = {t: m for t, m in matchups.items() if m == 2}
+    resist2x = {t: m for t, m in matchups.items() if m == 0.5}
+    resist4x = {t: m for t, m in matchups.items() if m == 0.25}
+    immune   = {t: m for t, m in matchups.items() if m == 0}
+
     def badge_row(label, types_dict, colour):
         if not types_dict:
             return
@@ -589,11 +625,25 @@ def show_type_matchup_dialog(type_1, type_2, df):
         badges += '</div></div>'
         st.markdown(badges, unsafe_allow_html=True)
 
-    badge_row("4x WEAK", weak4x, "#FF4444")
-    badge_row("2x WEAK", weak2x, "#F44336")
-    badge_row("RESISTS (0.5x)", resist2x, "#4CAF50")
-    badge_row("RESISTS (0.25x)", resist4x, "#00C853")
-    badge_row("IMMUNE", immune, "#A0A0A0")
+    badge_row("4x WEAK",       weak4x,   "#FF4444")
+    badge_row("2x WEAK",       weak2x,   "#F44336")
+    badge_row("RESISTS 0.5x",  resist2x, "#4CAF50")
+    badge_row("RESISTS 0.25x", resist4x, "#00C853")
+    badge_row("IMMUNE",        immune,   "#A0A0A0")
+
+    # Add ability immunity to the immune row display
+    if immune_type:
+        tc = TYPE_COLOURS.get(immune_type, "#888")
+        st.markdown(
+            '<div style="margin-bottom:0.6rem;">'
+            '<span style="font-family:Press Start 2P;font-size:0.45rem;color:#A0A0A0;">'
+            'IMMUNE (via ability)</span><br>'
+            '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">'
+            '<span style="background:' + tc + ';color:white;font-family:Nunito;'
+            'font-size:0.75rem;font-weight:700;padding:2px 10px;border-radius:10px;">'
+            + immune_type + '</span>'
+            '</div></div>',
+            unsafe_allow_html=True)
 
     if not weak4x and not weak2x:
         st.markdown(
@@ -601,23 +651,24 @@ def show_type_matchup_dialog(type_1, type_2, df):
             'No weaknesses! Exceptional defensive typing.</p>',
             unsafe_allow_html=True)
 
-    # Top 5 counters per weakness type
+    # Top counters per weakness type
     all_weaknesses = list(weak4x.keys()) + list(weak2x.keys())
     if all_weaknesses:
         st.markdown(
-            '<p style="font-family:Press Start 2P;font-size:0.5rem;'
+            '<p style="font-family:Press Start 2P;font-size:0.45rem;'
             'color:#FFCB05;margin-top:0.8rem;">TOP COUNTERS BY WEAKNESS TYPE</p>',
             unsafe_allow_html=True)
 
-        base_df = df[(df['form_type'] == 'Base') &
-                     (df['legendary_category'] == 'None')].copy()
+        base_df = df[
+            (df['form_type'] == 'Base') &
+            (df['legendary_category'] == 'None')
+        ].copy()
 
         for weak_type in all_weaknesses:
             multiplier = matchups[weak_type]
             label = "4x" if multiplier == 4 else "2x"
-            tc = TYPE_COLOURS.get(weak_type, "#888")
+            tc    = TYPE_COLOURS.get(weak_type, "#888")
 
-            # Top 5 Pokemon of this attacking type by BST
             top5 = base_df[
                 (base_df['type_1'] == weak_type) |
                 (base_df['type_2'] == weak_type)
@@ -646,12 +697,10 @@ def show_type_matchup_dialog(type_1, type_2, df):
                         '<img src="' + surl + '" width="56" height="56" '
                         'style="image-rendering:pixelated;" '
                         'onerror="this.style.display=\'none\'">'
-                        '<p style="font-family:Press Start 2P;font-size:0.42rem;'
-                        'color:#FFCB05;margin:3px 0 1px;">'
-                        + row['name'].upper() + '</p>'
+                        '<p style="font-family:Press Start 2P;font-size:0.35rem;'
+                        'color:#FFCB05;margin:3px 0 1px;">' + row['name'].upper() + '</p>'
                         '<p style="font-family:Nunito;font-size:0.65rem;'
-                        'color:#A0A0A0;margin:0;">'
-                        + row['type_1'] + t2d + '</p>'
+                        'color:#A0A0A0;margin:0;">' + row['type_1'] + t2d + '</p>'
                         '<p style="font-family:Nunito;font-size:0.7rem;'
                         'color:#EAEAEA;margin:0;">BST ' + str(int(row['bst'])) + '</p>'
                         '</div>',
@@ -750,6 +799,204 @@ def tab_predictor(df, model_data, tier_model_data):
         st.markdown("<div style='margin-top:0.42rem;'></div>", unsafe_allow_html=True)
         go_btn = st.button("ANALYSE", use_container_width=True, key="analyse_btn")
 
+    # Ability row
+    st.markdown(
+        "<p style='font-family:Press Start 2P;font-size:0.42rem;color:#FFCB05;"
+        "margin-bottom:0.3rem;margin-top:0.5rem;'>ABILITY</p>",
+        unsafe_allow_html=True)
+
+    # Grouped ability options with descriptions
+    ABILITY_OPTIONS = {
+        "-- S Tier (Score 5): Game-defining --": {
+            "Speed Boost":      "Raises Speed by 1 each turn. Makes slow Pokemon fast enough to sweep.",
+            "Regenerator":      "Heals 1/3 HP on switching out. Enables aggressive pivoting.",
+            "Protean":          "Changes type to match the move used. Every hit gets STAB.",
+            "Huge Power":       "Doubles Attack stat. Makes otherwise weak Pokemon hit like legendaries.",
+            "Pure Power":       "Doubles Attack stat. Same as Huge Power.",
+            "Intimidate":       "Lowers opponent's Attack on switch-in. Excellent for bulky teams.",
+            "Levitate":         "Immune to Ground-type moves. Removes one of the best coverage types.",
+            "Magic Bounce":     "Reflects status moves back at the user. Shuts down hazard setters.",
+            "Multiscale":       "Halves damage taken at full HP. Makes tanky Pokemon nearly unkillable early.",
+            "Shadow Tag":       "Prevents opponent from switching out. Enables guaranteed KOs.",
+            "Arena Trap":       "Prevents grounded opponents from switching. Trapping ability.",
+            "Imposter":         "Transforms into the opponent on switch-in. Best on Ditto.",
+            "Drizzle":          "Summons permanent Rain on switch-in. Boosts Water moves 50%.",
+            "Drought":          "Summons permanent Sun on switch-in. Boosts Fire moves 50%.",
+            "Sand Stream":      "Summons permanent Sandstorm. Boosts Rock Sp.Def 50%.",
+            "Electric Surge":   "Sets Electric Terrain. Boosts Electric moves and blocks sleep.",
+            "Psychic Surge":    "Sets Psychic Terrain. Boosts Psychic moves and blocks priority.",
+            "Misty Surge":      "Sets Misty Terrain. Halves Dragon damage and blocks status.",
+            "Grassy Surge":     "Sets Grassy Terrain. Boosts Grass moves and heals each turn.",
+            "Hadron Engine":    "Sets Electric Terrain and boosts Sp.Atk. Gen 9 Miraidon ability.",
+            "Orichalcum Pulse": "Sets Sun and boosts Attack in Sun. Gen 9 Koraidon ability.",
+            "Wonder Guard":     "Only super-effective moves can hit. Only on Shedinja.",
+        },
+        "-- A Tier (Score 4): Excellent --": {
+            "Adaptability":     "STAB bonus raised from 1.5x to 2x. Every same-type move hits harder.",
+            "Magic Guard":      "Only takes damage from direct attacks. No chip damage ever.",
+            "Contrary":         "Stat changes are reversed. Turns debuffs into buffs.",
+            "Swift Swim":       "Doubles Speed in Rain. Essential for Rain teams.",
+            "Chlorophyll":      "Doubles Speed in Sun. Essential for Sun teams.",
+            "Sand Rush":        "Doubles Speed in Sand. Core Sand team ability.",
+            "Unburden":         "Doubles Speed after consuming held item. Strong with berries.",
+            "Prankster":        "Status moves get +1 priority. Thunder Wave and Tailwind go first.",
+            "Beast Boost":      "Raises highest stat after KO. Snowballs quickly.",
+            "Tough Claws":      "Boosts contact moves by 30%. Strong on physical attackers.",
+            "Pixilate":         "Normal moves become Fairy-type with 20% boost.",
+            "Galvanize":        "Normal moves become Electric-type with 20% boost.",
+            "Aerilate":         "Normal moves become Flying-type with 20% boost.",
+            "Disguise":         "Absorbs one hit with no damage. Free turn for Mimikyu.",
+            "Shadow Shield":    "Halves damage at full HP. Legendary-exclusive Multiscale.",
+            "Water Bubble":     "Doubles Water move power and halves Fire damage taken.",
+            "Transistor":       "Boosts Electric moves by 50%. Gen 8 Regielectki ability.",
+            "Dragon's Maw":     "Boosts Dragon moves by 50%. Gen 8 Regidrago ability.",
+            "Intrepid Sword":   "Raises Attack by 1 on entry. Zacian ability.",
+            "Dauntless Shield": "Raises Defense by 1 on entry. Zamazenta ability.",
+        },
+        "-- B Tier (Score 3): Good --": {
+            "Iron Fist":        "Boosts punching moves by 20%. Strong on Conkeldurr and Hitmonchan.",
+            "Sheer Force":      "Removes secondary effects but boosts those moves by 30%.",
+            "Guts":             "Boosts Attack 50% when statused. Turns status into a benefit.",
+            "Technician":       "Boosts moves with 60 BP or less by 50%. Makes weak moves strong.",
+            "Serene Grace":     "Doubles secondary effect chances. 60% flinch chance with Air Slash.",
+            "Reckless":         "Boosts recoil moves by 20%. Strong on Entei and Staraptor.",
+            "Strong Jaw":       "Boosts biting moves by 50%. Used by Dracovish and Garchomp.",
+            "Moxie":            "Raises Attack after KO. Snowballs in offensive play.",
+            "Defiant":          "Raises Attack by 2 when stats are lowered. Punishes Intimidate.",
+            "Competitive":      "Raises Sp.Atk by 2 when stats are lowered. Special Defiant.",
+            "Natural Cure":     "Cures status on switching out. Great on defensive pivots.",
+            "Shed Skin":        "33% chance to cure status each turn. Reliable on bulky Pokemon.",
+            "Unaware":          "Ignores opponent's stat boosts when attacking or defending.",
+            "Thick Fat":        "Halves damage from Fire and Ice moves. Great bulk improvement.",
+            "Flash Fire":       "Immune to Fire, boosts own Fire moves when hit by Fire.",
+            "Water Absorb":     "Immune to Water, heals 25% HP when hit by Water.",
+            "Volt Absorb":      "Immune to Electric, heals 25% HP when hit by Electric.",
+            "Sap Sipper":       "Immune to Grass, raises Attack when hit by Grass.",
+            "Storm Drain":      "Immune to Water, raises Sp.Atk when hit by Water.",
+            "Lightning Rod":    "Immune to Electric, raises Sp.Atk when hit by Electric.",
+            "Gooey":            "Lowers opponent's Speed when they make contact.",
+            "Stamina":          "Raises Defense by 1 when hit. Mudsdale's ability.",
+            "Ice Scales":       "Halves Special damage taken. Frosmoth ability.",
+            "Punk Rock":        "Boosts sound moves 30% and halves sound damage taken.",
+        },
+        "-- C Tier (Score 2): Situational --": {
+            "Static":           "30% chance to paralyse on contact. Mild deterrent.",
+            "Flame Body":       "30% chance to burn on contact. Useful on walls.",
+            "Rough Skin":       "Damages attacker 1/8 HP on contact. Passive chip damage.",
+            "Iron Barbs":       "Damages attacker 1/8 HP on contact. Same as Rough Skin.",
+            "Synchronize":      "Copies status conditions back to the opponent.",
+            "Pressure":         "Opponent's moves use 2 PP instead of 1. Stalling ability.",
+            "Filter":           "Reduces super-effective damage by 25%.",
+            "Solid Rock":       "Reduces super-effective damage by 25%. Same as Filter.",
+            "Analytic":         "Boosts moves by 30% if moving last. Good on slow attackers.",
+            "Hustle":           "Raises Attack 50% but lowers physical accuracy 20%.",
+            "Simple":           "All stat changes are doubled. Can be good or bad.",
+            "Marvel Scale":     "Raises Defense 50% when statused. Milotic ability.",
+            "Overcoat":         "Immune to weather damage and powder moves.",
+            "Harvest":          "50% chance to restore a berry each turn in Sun.",
+            "Scrappy":          "Normal and Fighting moves hit Ghost types.",
+            "Cursed Body":      "30% chance to disable the move that hits this Pokemon.",
+        },
+        "-- D Tier (Score 1): Weak / Filler --": {
+            "Keen Eye":         "Prevents accuracy reduction. Rarely matters competitively.",
+            "Inner Focus":      "Prevents flinching. Minor benefit.",
+            "Own Tempo":        "Prevents confusion. Confusion is rare.",
+            "Oblivious":        "Prevents infatuation and Taunt. Very niche.",
+            "Early Bird":       "Wakes up from sleep faster. Sleep is uncommon.",
+            "Pickup":           "May pick up an item after battle. No in-battle effect.",
+            "Shed Skin":        "33% chance to cure status each turn.",
+            "Run Away":         "Can always flee from wild battles. No competitive use.",
+            "Illuminate":       "Raises encounter rate. No competitive use.",
+            "Insomnia":         "Immune to sleep. Niche but occasionally useful.",
+            "Vital Spirit":     "Immune to sleep. Same as Insomnia.",
+            "Sand Veil":        "Raises evasion in Sand 20%. Banned in many formats.",
+            "Snow Cloak":       "Raises evasion in Hail 20%. Banned in many formats.",
+            "Leaf Guard":       "Prevents status in Sun. Very situational.",
+            "Frisk":            "Reveals opponent's held item on switch-in. Minor info.",
+            "Anticipation":     "Warns of super-effective moves. Minor info.",
+        },
+    }
+
+    CRIPPLING_ABILITY_INFO = {
+        "Truant":      "Can only act every other turn. Slaking's curse — 670 BST wasted.",
+        "Slow Start":  "Attack and Speed halved for the first 5 turns. Regigigas crippled.",
+        "Defeatist":   "Attack and Sp.Atk halved when HP drops below 50%. Archeops ruined.",
+        "Klutz":       "Cannot use held items. Removes all item-based strategies.",
+        "Stall":       "Always moves last regardless of Speed. Nearly always bad.",
+        "Heavy Metal":  "Doubles weight. Makes the Pokemon weaker to Low Kick and Grass Knot.",
+    }
+
+    ab1, ab2 = st.columns([2, 2])
+
+    with ab1:
+        # Build flat option list with group headers
+        flat_options = ["None / Unknown"]
+        group_map    = {}
+        for group, abilities in ABILITY_OPTIONS.items():
+            flat_options.append(group)  # non-selectable header
+            for ab_name in abilities:
+                flat_options.append("  " + ab_name)
+                group_map["  " + ab_name] = (ab_name, abilities[ab_name])
+
+        selected_raw = st.selectbox(
+            "Select Ability",
+            options=flat_options,
+            index=0,
+            key="pred_ability",
+            help="Sorted by competitive impact. Group headers are not selectable.",
+        )
+
+        # Show description below the selectbox
+        if selected_raw in group_map:
+            ab_name, ab_desc = group_map[selected_raw]
+            st.markdown(
+                '<div style="background:#0f3460;border-left:3px solid #FFCB05;'
+                'padding:0.4rem 0.6rem;border-radius:0 6px 6px 0;margin-top:0.3rem;">'
+                '<p style="font-family:Press Start 2P;font-size:0.42rem;'
+                'color:#FFCB05;margin:0 0 3px;">' + ab_name.upper() + '</p>'
+                '<p style="font-family:Nunito;font-size:0.78rem;'
+                'color:#A0A0A0;margin:0;">' + ab_desc + '</p>'
+                '</div>',
+                unsafe_allow_html=True)
+        elif selected_raw == "None / Unknown":
+            st.markdown(
+                '<div style="background:#0f3460;border-left:3px solid #555;'
+                'padding:0.4rem 0.6rem;border-radius:0 6px 6px 0;margin-top:0.3rem;">'
+                '<p style="font-family:Nunito;font-size:0.78rem;color:#555;margin:0;">'
+                'No ability selected - model uses average ability score (1).</p>'
+                '</div>',
+                unsafe_allow_html=True)
+
+    with ab2:
+        has_crippling = st.checkbox(
+            "Has crippling ability",
+            key="pred_crippling",
+            help="Truant, Slow Start, Defeatist etc. — abilities that actively hurt the Pokemon")
+
+        if has_crippling:
+            crippling_options = list(CRIPPLING_ABILITY_INFO.keys())
+            selected_crippling = st.selectbox(
+                "Select crippling ability",
+                options=crippling_options,
+                key="pred_crippling_name",
+            )
+            # Show crippling ability description
+            st.markdown(
+                '<div style="background:#b71c1c;border-left:3px solid #F44336;'
+                'padding:0.4rem 0.6rem;border-radius:0 6px 6px 0;margin-top:0.3rem;">'
+                '<p style="font-family:Nunito;font-size:0.78rem;color:#EAEAEA;margin:0;">'
+                + CRIPPLING_ABILITY_INFO.get(selected_crippling, "") + '</p>'
+                '</div>',
+                unsafe_allow_html=True)
+        else:
+            st.markdown(
+                '<div style="background:#1a1a2e;border:1px solid #333;'
+                'border-radius:6px;padding:0.5rem 0.8rem;margin-top:0.2rem;opacity:0.4;">'
+                '<p style="font-family:Nunito;font-size:0.8rem;color:#555;margin:0;">'
+                'Select crippling ability</p>'
+                '</div>',
+                unsafe_allow_html=True)
+
     divider()
 
     if go_btn:
@@ -758,6 +1005,27 @@ def tab_predictor(df, model_data, tier_model_data):
     if st.session_state.get("show_results"):
         with st.spinner("Consulting the Pokedex..."):
             try:
+                # Look up ability score from scored CSV
+                ability_name = st.session_state.get("pred_ability", "").strip()
+                is_crippling = st.session_state.get("pred_crippling", False)
+
+                if is_crippling:
+                    ab_score = -3
+                elif ability_name:
+                    from src.feature_engineering import ABILITY_SCORES
+                    is_crippling  = st.session_state.get("pred_crippling", False)
+                    selected_raw  = st.session_state.get("pred_ability", "None / Unknown")
+
+                    if is_crippling:
+                        ab_score     = -3
+                        ability_name = st.session_state.get("pred_crippling_name", "Truant")
+                    elif selected_raw and selected_raw not in ("None / Unknown",) and not selected_raw.startswith("--"):
+                        ability_name = selected_raw.strip()
+                        ab_score     = ABILITY_SCORES.get(ability_name, 1)
+                    else:
+                        ab_score     = 1
+                        ability_name = "Unknown"
+
                 row = build_feature_row(
                     hp=st.session_state["pred_hp"],
                     attack=st.session_state["pred_attack"],
@@ -771,6 +1039,9 @@ def tab_predictor(df, model_data, tier_model_data):
                     is_legendary=st.session_state["pred_is_legendary"],
                     height=st.session_state["pred_height"],
                     weight=st.session_state["pred_weight"],
+                    hidden_ability=ability_name if ability_name else 'Unknown',
+                    best_ability_score=max(0, ab_score),
+                    has_crippling_ability=1 if is_crippling else 0,
                 )
                 res  = predict_viability(row, model_data)
                 prob = res['probability'] * 100
@@ -917,13 +1188,14 @@ def tab_predictor(df, model_data, tier_model_data):
                 disp.index = range(1, len(disp) + 1)
                 st.dataframe(disp, use_container_width=True)
             
-                # SEE WHAT BEATS ME button
-                st.markdown("<div style='margin-top:0.8rem;'></div>", unsafe_allow_html=True)
-                if st.button("SEE WHAT BEATS ME", key="beats_me_btn"):
+                if st.button("SEE WHAT BEATS IT!!", key="beats_me_btn"):
+                    selected_raw = st.session_state.get("pred_ability", "None / Unknown")
+                    ab_for_dialog = selected_raw.strip() if selected_raw not in ("None / Unknown", "") and not selected_raw.startswith("--") else "Unknown"
                     show_type_matchup_dialog(
                         st.session_state["pred_type1"],
                         st.session_state["pred_type2"],
-                        df
+                        df,
+                        ability=ab_for_dialog
                     )
 
             except Exception as e:
@@ -943,8 +1215,8 @@ def tab_model(df, df_t, model_data):
     mdl, fc = model_data['model'], model_data['feature_cols']
 
     c1,c2,c3,c4 = st.columns(4)
-    with c1: st.metric("ROC-AUC",    "0.932")
-    with c2: st.metric("Accuracy",   "86.6%")
+    with c1: st.metric("ROC-AUC",    "0.9452")
+    with c2: st.metric("Accuracy",   "89.3%")
     with c3: st.metric("Train Gens", "1 - 7")
     with c4: st.metric("Test Gen",   "8")
 
@@ -961,7 +1233,7 @@ def tab_model(df, df_t, model_data):
     with cc:
         st.markdown("### CONFUSION MATRIX - GEN 8")
         fig_cm = px.imshow(
-            [[64,7],[4,7]],
+            [[65,8],[1,10]],
             labels=dict(x="Predicted", y="Actual", color="Count"),
             x=['Non-Viable','Viable'], y=['Non-Viable','Viable'],
             color_continuous_scale='YlOrRd', text_auto=True,
@@ -1010,12 +1282,12 @@ def tab_model(df, df_t, model_data):
     overrated = df_tiered_base[
         (df_tiered_base['pred_viable'] == True) &
         (df_tiered_base['actual_viable'] == False)
-    ].sort_values('pred_probability', ascending=False).head(10)
+    ].sort_values('pred_probability', ascending=False)
 
     underrated = df_tiered_base[
         (df_tiered_base['pred_viable'] == False) &
         (df_tiered_base['actual_viable'] == True)
-    ].sort_values('pred_probability', ascending=True).head(10)
+    ].sort_values('pred_probability', ascending=True)
 
     col_over, col_under = st.columns(2)
 
@@ -1023,11 +1295,12 @@ def tab_model(df, df_t, model_data):
         st.markdown(
             '<p style="font-family:Press Start 2P;font-size:0.5rem;color:#F44336;">'
             'OVERRATED BY MODEL</p>'
-            '<p style="font-family:Nunito;color:#A0A0A0;font-size:0.8rem;margin-top:-0.42rem;">'
+            '<p style="font-family:Nunito;color:#A0A0A0;font-size:0.8rem;margin-top:-0.3rem;">'
             'Good stats, but ability or movepool lets them down</p>',
             unsafe_allow_html=True)
 
-        for _, row in overrated.iterrows():
+        # Show top 10 by default
+        for _, row in overrated.head(10).iterrows():
             t2   = " / " + row['type_2'] if row['type_2'] != "None" else ""
             surl = sprite_url(int(row['pokedex_id']))
             prob = round(float(row['pred_probability']), 1)
@@ -1052,6 +1325,37 @@ def tab_model(df, df_t, model_data):
                 'color:#A0A0A0;margin:0;">actual: ' + row['tier'] + '</p>'
                 '</div></div>',
                 unsafe_allow_html=True)
+
+        # Expander for remaining overrated
+        remaining = overrated.iloc[10:]
+        if len(remaining) > 0:
+            with st.expander("SHOW ALL " + str(len(overrated)) + " OVERRATED POKEMON"):
+                for _, row in remaining.iterrows():
+                    t2   = " / " + row['type_2'] if row['type_2'] != "None" else ""
+                    surl = sprite_url(int(row['pokedex_id']))
+                    prob = round(float(row['pred_probability']), 1)
+                    st.markdown(
+                        '<div style="display:flex;align-items:center;gap:0.8rem;'
+                        'background:#0f3460;border-left:3px solid #F44336;'
+                        'padding:0.5rem 0.7rem;margin-bottom:0.4rem;'
+                        'border-radius:0 6px 6px 0;">'
+                        '<img src="' + surl + '" width="40" height="40" '
+                        'style="image-rendering:pixelated;" '
+                        'onerror="this.style.display=\'none\'">'
+                        '<div style="flex:1;">'
+                        '<p style="font-family:Press Start 2P;font-size:0.45rem;'
+                        'color:#FFCB05;margin:0;">' + row['name'].upper() + '</p>'
+                        '<p style="font-family:Nunito;font-size:0.75rem;'
+                        'color:#A0A0A0;margin:0;">'
+                        + row['type_1'] + t2 + ' - BST ' + str(int(row['bst'])) + '</p>'
+                        '</div>'
+                        '<div style="text-align:right;">'
+                        '<p style="font-family:Press Start 2P;font-size:0.4rem;'
+                        'color:#F44336;margin:0;">' + str(prob) + '%</p>'
+                        '<p style="font-family:Nunito;font-size:0.7rem;'
+                        'color:#A0A0A0;margin:0;">actual: ' + row['tier'] + '</p>'
+                        '</div></div>',
+                        unsafe_allow_html=True)
 
     with col_under:
         st.markdown(
@@ -1129,7 +1433,7 @@ def main():
         '<img src="' + bulbasaur_url + '" '
         'style="width:60px;height:60px;object-fit:contain;'
         'filter:drop-shadow(0 0 6px rgba(124,199,76,0.6));" '
-        'onerror="this.style.display:\'none\'">'
+        'onerror="this.style.display=\'none\'">'
 
         # Title
         '<h1 style="font-size:0.95rem !important;margin:0;">'
@@ -1140,7 +1444,7 @@ def main():
         '<img src="' + miraidon_url + '" '
         'style="width:80px;height:80px;object-fit:contain;'
         'filter:drop-shadow(0 0 6px rgba(99,144,240,0.6));" '
-        'onerror="this.style.display:\'none\'">'
+        'onerror="this.style.display=\'none\'">'
 
         '</div>'
 
