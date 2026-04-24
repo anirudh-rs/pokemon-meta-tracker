@@ -116,7 +116,7 @@ p,li,label,.stMarkdown { font-family:'Nunito',sans-serif !important; color:#EAEA
 }
 .stTabs [data-baseweb="tab"] {
     font-family:'Press Start 2P',monospace !important;
-    font-size:0.42rem !important;
+    font-size:0.5rem !important;
     color:#A0A0A0 !important;
     background-color:#0f3460 !important;
     border-radius:6px 6px 0 0 !important;
@@ -327,7 +327,7 @@ def tab_home(df, df_t):
                 'display:flex;gap:0.7rem;align-items:flex-start;">'
                 '<span style="font-size:1.1rem;">' + icon + '</span>'
                 '<div>'
-                '<p style="font-family:Press Start 2P;font-size:0.42rem;'
+                '<p style="font-family:Press Start 2P;font-size:0.5rem;'
                 'color:#FFCB05;margin:0 0 4px;">' + title + '</p>'
                 '<p style="font-family:Nunito;font-size:0.8rem;'
                 'color:#A0A0A0;margin:0;">' + desc + '</p>'
@@ -592,7 +592,7 @@ def show_type_matchup_dialog(type_1, type_2, df, ability='Unknown'):
         st.markdown(
             '<div style="background:#1b5e20;border-left:3px solid #4CAF50;'
             'padding:0.5rem 0.8rem;border-radius:0 6px 6px 0;margin-bottom:0.8rem;">'
-            '<p style="font-family:Press Start 2P;font-size:0.42rem;'
+            '<p style="font-family:Press Start 2P;font-size:0.5rem;'
             'color:#4CAF50;margin:0 0 3px;">ABILITY IMMUNITY</p>'
             '<p style="font-family:Nunito;font-size:0.82rem;color:#EAEAEA;margin:0;">'
             + ability + ' grants immunity to '
@@ -612,7 +612,7 @@ def show_type_matchup_dialog(type_1, type_2, df, ability='Unknown'):
     def badge_row(label, types_dict, colour):
         if not types_dict:
             return
-        badges = '<div style="margin-bottom:0.6rem;">'
+        badges = '<div style="margin-bottom:0.7rem;">'
         badges += '<span style="font-family:Press Start 2P;font-size:0.45rem;color:' + colour + ';">' + label + '</span><br>'
         badges += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">'
         for t in types_dict:
@@ -635,7 +635,7 @@ def show_type_matchup_dialog(type_1, type_2, df, ability='Unknown'):
     if immune_type:
         tc = TYPE_COLOURS.get(immune_type, "#888")
         st.markdown(
-            '<div style="margin-bottom:0.6rem;">'
+            '<div style="margin-bottom:0.7rem;">'
             '<span style="font-family:Press Start 2P;font-size:0.45rem;color:#A0A0A0;">'
             'IMMUNE (via ability)</span><br>'
             '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">'
@@ -707,7 +707,221 @@ def show_type_matchup_dialog(type_1, type_2, df, ability='Unknown'):
                         unsafe_allow_html=True)
 
 # -- TAB 6: VIABILITY PREDICTOR ------------------------------------------------
-def tab_predictor(df, model_data, tier_model_data):
+
+# -- Nature data ---------------------------------------------------------------
+NATURES = {
+    # (boost_stat, drop_stat, competitive_note)
+    "Adamant": ("attack",    "sp_attack",  "Best physical attacker nature. More raw power."),
+    "Brave":   ("attack",    "speed",      "Physical attacker for Trick Room. Slowest = fastest in TR."),
+    "Lonely":  ("attack",    "defense",    "Physical attacker, sacrifices physical bulk."),
+    "Naughty": ("attack",    "sp_defense", "Physical attacker, sacrifices special bulk."),
+    "Modest":  ("sp_attack", "attack",     "Best special attacker nature. More raw power."),
+    "Quiet":   ("sp_attack", "speed",      "Special attacker for Trick Room."),
+    "Mild":    ("sp_attack", "defense",    "Special attacker, sacrifices physical bulk."),
+    "Rash":    ("sp_attack", "sp_defense", "Special attacker, sacrifices special bulk."),
+    "Jolly":   ("speed",     "sp_attack",  "Physical attacker that needs Speed. Most common on fast sweepers."),
+    "Timid":   ("speed",     "attack",     "Special attacker that needs Speed. Most common on fast special sweepers."),
+    "Hasty":   ("speed",     "defense",    "Mixed or physical attacker needing Speed. Sacrifices physical bulk."),
+    "Naive":   ("speed",     "sp_defense", "Mixed attacker needing Speed. Sacrifices special bulk."),
+    "Bold":    ("defense",   "attack",     "Physical wall. Takes hits from physical attackers."),
+    "Relaxed": ("defense",   "speed",      "Physical wall for Trick Room. Maximises bulk over Speed."),
+    "Impish":  ("defense",   "sp_attack",  "Physical wall that keeps Attack. Most common on defensive Pokemon."),
+    "Lax":     ("defense",   "sp_defense", "Physical wall, sacrifices special bulk. Rarely used."),
+    "Calm":    ("sp_defense","attack",     "Special wall. Takes hits from special attackers."),
+    "Sassy":   ("sp_defense","speed",      "Special wall for Trick Room."),
+    "Careful": ("sp_defense","sp_attack",  "Special wall that keeps Attack. Common on defensive Pokemon."),
+    "Gentle":  ("sp_defense","defense",    "Special wall, sacrifices physical bulk. Rarely used."),
+    "Hardy":   (None, None,               "Neutral - no stat change. Never use competitively."),
+    "Docile":  (None, None,               "Neutral - no stat change. Never use competitively."),
+    "Serious": (None, None,               "Neutral - no stat change. Never use competitively."),
+    "Bashful": (None, None,               "Neutral - no stat change. Never use competitively."),
+    "Quirky":  (None, None,               "Neutral - no stat change. Never use competitively."),
+}
+
+# -- Speed tier reference data -------------------------------------------------
+def build_speed_tiers(df_t):
+    """Build speed tier reference from tiered dataset."""
+    return (
+        df_t[
+            (df_t['form_type'] == 'Base') &
+            (df_t['is_viable'] == True)
+        ][['name','speed','tier','type_1','type_2','pokedex_id']]
+        .drop_duplicates(subset='name')
+        .sort_values('speed', ascending=False)
+        .reset_index(drop=True)
+    )
+
+STAT_LABELS = {
+    "attack":    "Attack",
+    "sp_attack": "Sp.Atk",
+    "defense":   "Defense",
+    "sp_defense":"Sp.Def",
+    "speed":     "Speed",
+}
+
+NATURE_GROUPS = {
+    "Boosts Attack":    ["Adamant","Brave","Lonely","Naughty"],
+    "Boosts Sp.Atk":   ["Modest","Quiet","Mild","Rash"],
+    "Boosts Speed":     ["Jolly","Timid","Hasty","Naive"],
+    "Boosts Defense":   ["Bold","Relaxed","Impish","Lax"],
+    "Boosts Sp.Def":    ["Calm","Sassy","Careful","Gentle"],
+    "Neutral (no effect)": ["Hardy","Docile","Serious","Bashful","Quirky"],
+}
+
+
+# Abilities that make Speed-dropping natures viable (speed is boosted by ability)
+SPEED_BOOSTING_ABILITIES = {
+    'Speed Boost', 'Swift Swim', 'Chlorophyll', 'Sand Rush',
+    'Slush Rush', 'Surge Surfer', 'Unburden',
+}
+
+# Abilities that amplify Attack (making Attack-boosting nature even more important)
+ATTACK_AMPLIFYING_ABILITIES = {
+    'Huge Power', 'Pure Power', 'Gorilla Tactics',
+}
+
+# Abilities that amplify Sp.Atk
+SPATK_AMPLIFYING_ABILITIES = {
+    'Solar Power', 'Hadron Engine',
+}
+
+def recommend_nature(hp, attack, defense, sp_attack, sp_defense, speed,
+                     ability='Unknown', is_crippling=False):
+    """
+    Recommend the best competitive nature based on stat spread and ability.
+    Returns (nature_name, reason_string)
+    """
+    atk_bias   = attack    - sp_attack
+    spatk_bias = sp_attack - attack
+    def_bias   = defense   - sp_defense
+    spdef_bias = sp_defense - defense
+    fast       = speed >= 80
+
+    # Crippling ability — note it in the reason but still give best nature
+    crippling_note = " Note: crippling ability limits competitive viability regardless of nature." if is_crippling else ""
+
+    # Speed Boost / weather speed abilities — speed-dropping natures become viable
+    if ability in SPEED_BOOSTING_ABILITIES:
+        if atk_bias >= 10:
+            return "Adamant", (
+                ability + " boosts Speed automatically — no need to invest in Speed via nature. "
+                "Adamant maximises Attack for more immediate power." + crippling_note
+            )
+        elif spatk_bias >= 10:
+            return "Modest", (
+                ability + " boosts Speed automatically — Modest maximises Sp.Atk "
+                "instead of wasting the nature on Speed." + crippling_note
+            )
+        else:
+            return "Adamant", (
+                ability + " provides Speed — Adamant is the safe default "
+                "to maximise physical output." + crippling_note
+            )
+
+    # Huge Power / Pure Power — Attack already doubled, maximise further
+    if ability in ATTACK_AMPLIFYING_ABILITIES:
+        if fast:
+            return "Jolly", (
+                ability + " doubles Attack — the stat is already massive. "
+                "Jolly adds Speed to ensure you move first." + crippling_note
+            )
+        else:
+            return "Adamant", (
+                ability + " doubles Attack — Adamant pushes it even higher. "
+                "Overwhelming physical power is the strategy." + crippling_note
+            )
+
+    # Solar Power / Hadron Engine — Sp.Atk boosted by ability
+    if ability in SPATK_AMPLIFYING_ABILITIES:
+        if fast:
+            return "Timid", (
+                ability + " already boosts Sp.Atk — Timid adds Speed "
+                "so you move before opponents can KO you." + crippling_note
+            )
+        else:
+            return "Modest", (
+                ability + " boosts Sp.Atk — Modest amplifies it further "
+                "for maximum special damage." + crippling_note
+            )
+
+    # Standard logic below — no special ability interaction
+    # Physical sweeper
+    if atk_bias >= 20 and fast:
+        return "Jolly", (
+            "High Attack and decent Speed — Jolly maximises Speed to outpace threats "
+            "while dropping unused Sp.Atk." + crippling_note
+        )
+    if atk_bias >= 20 and speed <= 50:
+        return "Brave", (
+            "High Attack and very low Speed — Brave suits a Trick Room role "
+            "where being slower is an advantage." + crippling_note
+        )
+    if atk_bias >= 20:
+        return "Adamant", (
+            "High Attack and low Speed — Adamant squeezes maximum power "
+            "from physical moves." + crippling_note
+        )
+
+    # Special sweeper
+    if spatk_bias >= 20 and fast:
+        return "Timid", (
+            "High Sp.Atk and decent Speed — Timid maximises Speed "
+            "while dropping unused Attack." + crippling_note
+        )
+    if spatk_bias >= 20 and speed <= 50:
+        return "Quiet", (
+            "High Sp.Atk and very low Speed — Quiet suits a Trick Room role." + crippling_note
+        )
+    if spatk_bias >= 20:
+        return "Modest", (
+            "High Sp.Atk and low Speed — Modest squeezes maximum power "
+            "from special moves." + crippling_note
+        )
+
+    # Mixed attacker
+    if abs(atk_bias) < 20 and fast:
+        return "Naive", (
+            "Balanced offensive stats with good Speed — Naive boosts Speed "
+            "while dropping the less important Sp.Def." + crippling_note
+        )
+    if abs(atk_bias) < 20:
+        return "Hasty", (
+            "Balanced offensive stats — Hasty boosts Speed "
+            "while dropping Defense." + crippling_note
+        )
+
+    # Physical wall
+    if def_bias >= 30 and attack < 80:
+        return "Bold", (
+            "High Defense and low Attack — Bold maximises physical bulk." + crippling_note
+        )
+    if def_bias >= 20:
+        return "Impish", (
+            "High Defense — Impish boosts Defense while keeping Attack intact." + crippling_note
+        )
+
+    # Special wall
+    if spdef_bias >= 30 and attack < 80:
+        return "Calm", (
+            "High Sp.Def and low Attack — Calm maximises special bulk." + crippling_note
+        )
+    if spdef_bias >= 20:
+        return "Careful", (
+            "High Sp.Def — Careful boosts Sp.Def while keeping Attack intact." + crippling_note
+        )
+
+    # Default fallback
+    if attack >= sp_attack:
+        return "Jolly", (
+            "Balanced stats leaning physical — Jolly is a safe all-round choice." + crippling_note
+        )
+    else:
+        return "Timid", (
+            "Balanced stats leaning special — Timid is a safe all-round choice." + crippling_note
+        )
+
+
+def tab_predictor(df, df_t, model_data, tier_model_data):
     sh("VIABILITY PREDICTOR",
        "Design a Pokemon and see if it would be competitively viable", pid=778)
 
@@ -738,8 +952,8 @@ def tab_predictor(df, model_data, tier_model_data):
 
     # Preset buttons - columns unpacked once outside the loop
     st.markdown(
-        "<p style='font-family:Press Start 2P;font-size:0.42rem;color:#FFCB05;"
-        "margin-bottom:0.42rem;'>QUICK PRESETS</p>",
+        "<p style='font-family:Press Start 2P;font-size:0.5rem;color:#FFCB05;"
+        "margin-bottom:0.5rem;'>QUICK PRESETS</p>",
         unsafe_allow_html=True)
 
     p0,p1,p2,p3,p4,p5,p6,p7,p8 = st.columns(9)
@@ -756,8 +970,8 @@ def tab_predictor(df, model_data, tier_model_data):
 
     # Stats inputs
     st.markdown(
-        "<p style='font-family:Press Start 2P;font-size:0.42rem;color:#FFCB05;"
-        "margin-bottom:0.42rem;'>STATS AND TYPING</p>",
+        "<p style='font-family:Press Start 2P;font-size:0.5rem;color:#FFCB05;"
+        "margin-bottom:0.5rem;'>STATS AND TYPING</p>",
         unsafe_allow_html=True)
 
     s1,s2,s3,s4,s5,s6 = st.columns(6)
@@ -790,18 +1004,18 @@ def tab_predictor(df, model_data, tier_model_data):
         bst = sum(st.session_state["pred_" + x]
                   for x in ["hp","attack","defense","sp_atk","sp_def","speed"])
         st.markdown(
-            '<div style="background:#0f3460;border:1px solid #FFCB05;padding:0.42rem;'
+            '<div style="background:#0f3460;border:1px solid #FFCB05;padding:0.5rem;'
             'border-radius:6px;text-align:center;margin-top:0.15rem;">'
             '<span style="font-family:Press Start 2P;font-size:0.45rem;color:#A0A0A0;">BST</span><br>'
             '<span style="font-family:Press Start 2P;font-size:0.95rem;color:#FFCB05;">'
             + str(bst) + '</span></div>',
             unsafe_allow_html=True)
-        st.markdown("<div style='margin-top:0.42rem;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top:0.5rem;'></div>", unsafe_allow_html=True)
         go_btn = st.button("ANALYSE", use_container_width=True, key="analyse_btn")
 
-    # Ability row
+    # ── ABILITY / NATURE / SPEED BLOCK ────────────────────────────────────────
     st.markdown(
-        "<p style='font-family:Press Start 2P;font-size:0.42rem;color:#FFCB05;"
+        "<p style='font-family:Press Start 2P;font-size:0.5rem;color:#FFCB05;"
         "margin-bottom:0.3rem;margin-top:0.5rem;'>ABILITY</p>",
         unsafe_allow_html=True)
 
@@ -958,6 +1172,14 @@ def tab_predictor(df, model_data, tier_model_data):
                 'color:#A0A0A0;margin:0;">' + ab_desc + '</p>'
                 '</div>',
                 unsafe_allow_html=True)
+        elif selected_raw.startswith("--"):
+            st.markdown(
+                '<div style="background:#1a1a2e;border-left:3px solid #555;'
+                'padding:0.4rem 0.6rem;border-radius:0 6px 6px 0;margin-top:0.3rem;">'
+                '<p style="font-family:Nunito;font-size:0.78rem;color:#555;margin:0;">'
+                'Please select an ability from this tier group.</p>'
+                '</div>',
+                unsafe_allow_html=True)
         elif selected_raw == "None / Unknown":
             st.markdown(
                 '<div style="background:#0f3460;border-left:3px solid #555;'
@@ -983,7 +1205,7 @@ def tab_predictor(df, model_data, tier_model_data):
             # Show crippling ability description
             st.markdown(
                 '<div style="background:#b71c1c;border-left:3px solid #F44336;'
-                'padding:0.4rem 0.6rem;border-radius:0 6px 6px 0;margin-top:0.3rem;">'
+                'padding:0.4rem 0.7rem;border-radius:0 6px 6px 0;margin-top:0.3rem;">'
                 '<p style="font-family:Nunito;font-size:0.78rem;color:#EAEAEA;margin:0;">'
                 + CRIPPLING_ABILITY_INFO.get(selected_crippling, "") + '</p>'
                 '</div>',
@@ -996,6 +1218,258 @@ def tab_predictor(df, model_data, tier_model_data):
                 'Select crippling ability</p>'
                 '</div>',
                 unsafe_allow_html=True)
+    
+    # Nature recommender
+    st.markdown(
+        "<p style='font-family:Press Start 2P;font-size:0.5rem;color:#FFCB05;"
+        "margin-bottom:0.3rem;margin-top:0.5rem;'>RECOMMENDED NATURE</p>",
+        unsafe_allow_html=True)
+
+    selected_raw_ab = st.session_state.get("pred_ability", "None / Unknown")
+    ability_for_nature = selected_raw_ab.strip() if selected_raw_ab not in ("None / Unknown", "") and not selected_raw_ab.startswith("--") else "Unknown"
+    is_crippling_for_nature = st.session_state.get("pred_crippling", False)
+
+    rec_nature, rec_reason = recommend_nature(
+        st.session_state["pred_hp"],
+        st.session_state["pred_attack"],
+        st.session_state["pred_defense"],
+        st.session_state["pred_sp_atk"],
+        st.session_state["pred_sp_def"],
+        st.session_state["pred_speed"],
+        ability=ability_for_nature,
+        is_crippling=is_crippling_for_nature,
+    )
+    boost_stat, drop_stat, _ = NATURES[rec_nature]
+    boost_label = "+" + STAT_LABELS[boost_stat] if boost_stat else "No change"
+    drop_label  = "-" + STAT_LABELS[drop_stat]  if drop_stat  else "No change"
+
+    st.markdown(
+        '<div style="background:#0f3460;border-left:4px solid #FFCB05;'
+        'padding:0.8rem 1rem;border-radius:0 8px 8px 0;margin-bottom:0.5rem;">'
+        '<div style="display:flex;align-items:center;gap:1rem;margin-bottom:6px;">'
+        '<p style="font-family:Press Start 2P;font-size:0.7rem;'
+        'color:#FFCB05;margin:0;">' + rec_nature.upper() + '</p>'
+        '<span style="background:#4CAF50;color:white;font-family:Nunito;'
+        'font-size:0.75rem;font-weight:700;padding:2px 10px;border-radius:8px;">'
+        + boost_label + '</span>'
+        '<span style="background:#F44336;color:white;font-family:Nunito;'
+        'font-size:0.75rem;font-weight:700;padding:2px 10px;border-radius:8px;">'
+        + drop_label + '</span>'
+        '</div>'
+        '<p style="font-family:Nunito;font-size:0.82rem;color:#A0A0A0;margin:0;">'
+        + rec_reason + '</p>'
+        '</div>',
+        unsafe_allow_html=True)
+
+    # All natures expander
+    with st.expander("SEE ALL 25 NATURES"):
+        for group_name, nature_list in NATURE_GROUPS.items():
+            st.markdown(
+                '<p style="font-family:Press Start 2P;font-size:0.5rem;'
+                'color:#FFCB05;margin:0.7rem 0 0.3rem;">' + group_name.upper() + '</p>',
+                unsafe_allow_html=True)
+            for nat in nature_list:
+                b, d, note = NATURES[nat]
+                b_html = (
+                    '<span style="background:#4CAF50;color:white;font-family:Nunito;'
+                    'font-size:0.7rem;font-weight:700;padding:1px 8px;border-radius:6px;">'
+                    '+' + STAT_LABELS[b] + '</span> '
+                ) if b else ''
+                d_html = (
+                    '<span style="background:#F44336;color:white;font-family:Nunito;'
+                    'font-size:0.7rem;font-weight:700;padding:1px 8px;border-radius:6px;">'
+                    '-' + STAT_LABELS[d] + '</span>'
+                ) if d else ''
+                is_rec = nat == rec_nature
+                border = 'border-left:3px solid #FFCB05;' if is_rec else 'border-left:3px solid #1a1a2e;'
+                st.markdown(
+                    '<div style="display:flex;align-items:flex-start;gap:0.8rem;'
+                    'background:#1a1a2e;' + border +
+                    'padding:0.4rem 0.7rem;margin-bottom:3px;border-radius:0 4px 4px 0;">'
+                    '<p style="font-family:Press Start 2P;font-size:0.5rem;'
+                    'color:' + ('#FFCB05' if is_rec else '#EAEAEA') + ';'
+                    'margin:0;min-width:70px;">' + nat.upper() + '</p>'
+                    '<div style="display:flex;gap:4px;align-items:center;min-width:140px;">'
+                    + b_html + d_html +
+                    '</div>'
+                    '<p style="font-family:Nunito;font-size:0.75rem;'
+                    'color:#A0A0A0;margin:0;">' + note + '</p>'
+                    '</div>',
+                    unsafe_allow_html=True)
+
+    # Speed tier calculator
+    user_speed = st.session_state["pred_speed"]
+
+    # Nature speed modifier — uses rec_nature already calculated above
+    SPEED_PLUS  = {"Jolly","Timid","Hasty","Naive"}
+    SPEED_MINUS = {"Brave","Quiet","Relaxed","Sassy"}
+    if rec_nature in SPEED_PLUS:
+        nature_mod  = 1.1
+        nature_note = rec_nature + " (+10% Speed)"
+    elif rec_nature in SPEED_MINUS:
+        nature_mod  = 0.9
+        nature_note = rec_nature + " (-10% Speed)"
+    else:
+        nature_mod  = 1.0
+        nature_note = ""
+
+    # Ability speed modifier — uses ability_for_nature already calculated above
+    WEATHER_SPEED = {'Swift Swim','Chlorophyll','Sand Rush','Slush Rush','Surge Surfer'}
+    if ability_for_nature == 'Speed Boost':
+        ability_speed_note = "Speed Boost raises Speed each turn - showing base only"
+        ability_mod        = 1.0
+    elif ability_for_nature in WEATHER_SPEED:
+        ability_speed_note = ability_for_nature + " doubles Speed in weather"
+        ability_mod        = 2.0
+    elif ability_for_nature == 'Unburden':
+        ability_speed_note = "Unburden doubles Speed after item consumed"
+        ability_mod        = 2.0
+    else:
+        ability_speed_note = ""
+        ability_mod        = 1.0
+
+    effective_speed = int(user_speed * nature_mod * ability_mod)
+    speed_changed   = effective_speed != user_speed
+
+    expander_title = "SEE SPEED TIERS FOR " + str(user_speed) + " BASE SPEED"
+    if speed_changed:
+        expander_title += " (" + str(effective_speed) + " EFFECTIVE)"
+
+    with st.expander(expander_title):
+        speed_df = build_speed_tiers(df_t)
+
+        outspeeds = speed_df[speed_df['speed'] <  effective_speed].copy()
+        ties      = speed_df[speed_df['speed'] == effective_speed].copy()
+        outsped   = speed_df[speed_df['speed'] >  effective_speed].copy()
+
+        # Show modifier note if applicable
+        notes = [n for n in [nature_note, ability_speed_note] if n]
+        if notes:
+            st.markdown(
+                '<div style="background:#0f3460;border-left:3px solid #FFCB05;'
+                'padding:0.4rem 0.8rem;border-radius:0 6px 6px 0;margin-bottom:0.8rem;">'
+                '<p style="font-family:Nunito;font-size:0.82rem;color:#FFCB05;margin:0;">'
+                + " · ".join(notes) + '</p>'
+                '</div>',
+                unsafe_allow_html=True)
+
+        # Full list popup
+        @st.dialog("FULL SPEED TIER LIST", width="large")
+        def show_speed_dialog(user_spd, speed_df):
+            outspeeds_all = speed_df[speed_df['speed'] <  user_spd].sort_values('speed', ascending=False)
+            ties_all      = speed_df[speed_df['speed'] == user_spd]
+            outsped_all   = speed_df[speed_df['speed'] >  user_spd].sort_values('speed')
+
+            def full_band(label, colour, df_band):
+                if len(df_band) == 0:
+                    return
+                st.markdown(
+                    '<p style="font-family:Press Start 2P;font-size:0.45rem;color:'
+                    + colour + ';margin:0.7rem 0 0.3rem;">'
+                    + label + ' (' + str(len(df_band)) + ')</p>',
+                    unsafe_allow_html=True)
+                for _, row in df_band.iterrows():
+                    surl = sprite_url(int(row['pokedex_id']))
+                    t2   = " / " + row['type_2'] if row['type_2'] != "None" else ""
+                    tier_col = {
+                        'Uber':'#F95587','OU':'#FFCB05','BL':'#FF9800',
+                        'UU':'#4CAF50','BL2':'#66BB6A','RU':'#29B6F6',
+                    }.get(row['tier'], '#A0A0A0')
+                    st.markdown(
+                        '<div style="display:flex;align-items:center;gap:0.7rem;'
+                        'background:#0f3460;border-left:3px solid ' + colour + ';'
+                        'padding:0.35rem 0.7rem;margin-bottom:3px;border-radius:0 4px 4px 0;">'
+                        '<img src="' + surl + '" width="40" height="40" '
+                        'style="image-rendering:pixelated;" '
+                        'onerror="this.style.display=\'none\'">'
+                        '<div style="flex:1;">'
+                        '<p style="font-family:Press Start 2P;font-size:0.5rem;'
+                        'color:#EAEAEA;margin:0;">' + row['name'].upper() + '</p>'
+                        '<p style="font-family:Nunito;font-size:0.7rem;'
+                        'color:#A0A0A0;margin:0;">' + row['type_1'] + t2 + '</p>'
+                        '</div>'
+                        '<span style="font-family:Press Start 2P;font-size:0.5rem;'
+                        'color:' + tier_col + ';margin-right:0.5rem;">' + str(row['tier']) + '</span>'
+                        '<span style="font-family:Press Start 2P;font-size:0.5rem;'
+                        'color:' + colour + ';min-width:28px;text-align:right;">'
+                        + str(int(row['speed'])) + '</span>'
+                        '</div>',
+                        unsafe_allow_html=True)
+
+            full_band("OUTSPED BY", "#F44336", outsped_all)
+            full_band("SPEED TIES", "#FFCB05", ties_all)
+            full_band("OUTSPEEDS",  "#4CAF50", outspeeds_all)
+
+        def speed_row(row, colour):
+            surl = sprite_url(int(row['pokedex_id']))
+            t2   = " / " + row['type_2'] if row['type_2'] != "None" else ""
+            tier_col = {
+                'Uber':'#F95587','OU':'#FFCB05','BL':'#FF9800',
+                'UU':'#4CAF50','BL2':'#66BB6A','RU':'#29B6F6',
+            }.get(row['tier'], '#A0A0A0')
+            st.markdown(
+                '<div style="display:flex;align-items:center;gap:0.7rem;'
+                'background:#0f3460;border-left:3px solid ' + colour + ';'
+                'padding:0.35rem 0.7rem;margin-bottom:3px;border-radius:0 4px 4px 0;">'
+                '<img src="' + surl + '" width="40" height="40" '
+                'style="image-rendering:pixelated;" '
+                'onerror="this.style.display=\'none\'">'
+                '<div style="flex:1;">'
+                '<p style="font-family:Press Start 2P;font-size:0.5rem;'
+                'color:#EAEAEA;margin:0;">' + row['name'].upper() + '</p>'
+                '<p style="font-family:Nunito;font-size:0.7rem;'
+                'color:#A0A0A0;margin:0;">' + row['type_1'] + t2 + '</p>'
+                '</div>'
+                '<span style="font-family:Press Start 2P;font-size:0.5rem;'
+                'color:' + tier_col + ';margin-right:0.5rem;">' + str(row['tier']) + '</span>'
+                '<span style="font-family:Press Start 2P;font-size:0.5rem;'
+                'color:' + colour + ';min-width:28px;text-align:right;">'
+                + str(int(row['speed'])) + '</span>'
+                '</div>',
+                unsafe_allow_html=True)
+
+        # Summary counts
+        st.markdown(
+            '<div style="display:flex;gap:1rem;margin-bottom:0.8rem;">'
+            '<div style="background:#1b5e20;border-radius:6px;padding:0.4rem 0.8rem;text-align:center;">'
+            '<p style="font-family:Press Start 2P;font-size:0.5rem;color:#4CAF50;margin:0;">OUTSPEEDS</p>'
+            '<p style="font-family:Press Start 2P;font-size:0.7rem;color:#4CAF50;margin:0;">'
+            + str(len(outspeeds)) + '</p></div>'
+            '<div style="background:#1a237e;border-radius:6px;padding:0.4rem 0.8rem;text-align:center;">'
+            '<p style="font-family:Press Start 2P;font-size:0.5rem;color:#FFCB05;margin:0;">TIES</p>'
+            '<p style="font-family:Press Start 2P;font-size:0.7rem;color:#FFCB05;margin:0;">'
+            + str(len(ties)) + '</p></div>'
+            '<div style="background:#b71c1c;border-radius:6px;padding:0.4rem 0.8rem;text-align:center;">'
+            '<p style="font-family:Press Start 2P;font-size:0.5rem;color:#F44336;margin:0;">OUTSPED BY</p>'
+            '<p style="font-family:Press Start 2P;font-size:0.7rem;color:#F44336;margin:0;">'
+            + str(len(outsped)) + '</p></div>'
+            '<div style="background:#0f3460;border-radius:6px;padding:0.4rem 0.8rem;'
+            'text-align:center;border:1px solid #FFCB05;">'
+            '<p style="font-family:Press Start 2P;font-size:0.5rem;color:#A0A0A0;margin:0;">BASE / EFF.</p>'
+            '<p style="font-family:Press Start 2P;font-size:0.7rem;color:#FFCB05;margin:0;">'
+            + str(user_speed) + ' / ' + str(effective_speed) + '</p></div>'
+            '</div>',
+            unsafe_allow_html=True)
+
+        # Top 10 per band
+        for label, colour, df_band, ascending in [
+            ("OUTSPED BY (top 10 closest)", "#F44336", outsped.nsmallest(10,'speed'),  True),
+            ("SPEED TIES",                  "#FFCB05", ties,                           False),
+            ("OUTSPEEDS (top 10 closest)",  "#4CAF50", outspeeds.nlargest(10,'speed'), False),
+        ]:
+            if len(df_band) == 0:
+                continue
+            st.markdown(
+                '<p style="font-family:Press Start 2P;font-size:0.5rem;color:'
+                + colour + ';margin:0.5rem 0 0.3rem;">' + label + '</p>',
+                unsafe_allow_html=True)
+            for _, row in df_band.iterrows():
+                speed_row(row, colour)
+
+        # Full list button
+        st.markdown("<div style='margin-top:0.8rem;'></div>", unsafe_allow_html=True)
+        if st.button("SEE FULL SPEED TIER LIST", key="speed_tier_full_btn"):
+            show_speed_dialog(effective_speed, speed_df)
 
     divider()
 
@@ -1122,7 +1596,7 @@ def tab_predictor(df, model_data, tier_model_data):
                             '<div style="flex:1;text-align:center;background:#1a1a2e;'
                             + ('border:2px solid ' + tc if t == tier else 'border:1px solid #333') + ';'
                             'border-radius:8px;padding:0.5rem 0.3rem;">'
-                            '<p style="font-family:Press Start 2P;font-size:0.42rem;'
+                            '<p style="font-family:Press Start 2P;font-size:0.5rem;'
                             'color:' + tc + ';margin:0 0 4px;' + weight + '">' + t.upper() + '</p>'
                             '<p style="font-family:Nunito;font-size:0.85rem;'
                             'color:#EAEAEA;margin:0;' + weight + '">' + str(p) + '%</p>'
@@ -1172,7 +1646,7 @@ def tab_predictor(df, model_data, tier_model_data):
                     'filter:drop-shadow(0 0 7px rgba(255,203,5,0.4));" '
                     'onerror="this.style.display=\'none\'">'
                     '<div>'
-                    '<p style="font-family:Press Start 2P;font-size:0.42rem;color:#A0A0A0;margin:0;">'
+                    '<p style="font-family:Press Start 2P;font-size:0.5rem;color:#A0A0A0;margin:0;">'
                     'CLOSEST MATCH</p>'
                     '<p style="font-family:Press Start 2P;font-size:0.7rem;color:#FFCB05;margin:4px 0;">'
                     + str(top['name']).upper() + '</p>'
@@ -1361,7 +1835,7 @@ def tab_model(df, df_t, model_data):
         st.markdown(
             '<p style="font-family:Press Start 2P;font-size:0.5rem;color:#4CAF50;">'
             'UNDERRATED BY MODEL</p>'
-            '<p style="font-family:Nunito;color:#A0A0A0;font-size:0.8rem;margin-top:-0.42rem;">'
+            '<p style="font-family:Nunito;color:#A0A0A0;font-size:0.8rem;margin-top:-0.5rem;">'
             'Weak stats on paper, but ability or niche makes them viable</p>',
             unsafe_allow_html=True)
 
@@ -1477,7 +1951,7 @@ def main():
     with tabs[2]: tab_types(df)
     with tabs[3]: tab_legendary(df)
     with tabs[4]: tab_profiles(df)
-    with tabs[5]: tab_predictor(df, md, td)
+    with tabs[5]: tab_predictor(df, df_t, md, td)
     with tabs[6]: tab_model(df, df_t, md)
     with tabs[7]: tab_gen9(df, md)
     with tabs[8]: tab_rankings(df, df_t)
@@ -1554,10 +2028,10 @@ def tab_gen9(df, model_data):
             surl     = sprite_url(int(row['pokedex_id']), official=True)
             st.markdown(
                 '<div style="background:#0f3460;border:1px solid ' + col_bar + ';'
-                'border-radius:8px;padding:0.6rem;text-align:center;margin-bottom:0.5rem;">'
+                'border-radius:8px;padding:0.7rem;text-align:center;margin-bottom:0.5rem;">'
                 '<img src="' + surl + '" width="80" height="80" '
                 'style="object-fit:contain;" onerror="this.style.display=\'none\'">'
-                '<p style="font-family:Press Start 2P;font-size:0.42rem;'
+                '<p style="font-family:Press Start 2P;font-size:0.5rem;'
                 'color:#FFCB05;margin:4px 0 2px;">' + row['name'].upper() + '</p>'
                 '<p style="font-family:Nunito;font-size:0.75rem;'
                 'color:#A0A0A0;margin:0;">' + row['type_1'] + t2 + '</p>'
@@ -1782,7 +2256,7 @@ def tab_rankings(df, df_t):
 
     headers = ['RANK','','GEN','TOTAL','TIERED','TOP TIER','VIABLE','VIABLE %','AVG BST']
     ths = "".join(
-        '<th style="padding:7px;font-family:Press Start 2P;font-size:0.42rem;'
+        '<th style="padding:7px;font-family:Press Start 2P;font-size:0.5rem;'
         'color:#FFCB05;text-align:center;">' + h + '</th>'
         for h in headers)
 
