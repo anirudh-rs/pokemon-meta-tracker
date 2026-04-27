@@ -1,13 +1,15 @@
 # PokeMeta Analyser
 
-A machine learning and data analysis project tracking how the Pokemon competitive meta has shifted across all nine generations. Identifies type dominance shifts, legendary disruptions, and predicts competitive viability based on stats, typing and ability scores.
+A machine learning and data science project tracking how the Pokemon competitive meta has shifted across all nine generations. Identifies type dominance shifts, legendary disruptions, and predicts competitive viability based on stats, typing, and ability scores.
 
 Built with Python, XGBoost, SHAP, Plotly, and Streamlit.
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
+![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-red)
 ![XGBoost](https://img.shields.io/badge/Model-XGBoost-orange)
 ![ROC-AUC](https://img.shields.io/badge/ROC--AUC-0.9452-green)
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-FF4B4B)](https://pokemon-meta-tracker.streamlit.app/)
+
+**Live Demo:** https://pokemon-meta-tracker.streamlit.app/
 
 ---
 
@@ -24,8 +26,8 @@ Nine interactive tabs with a Pokemon-themed dark UI, sprite decorations, type ba
 | Stat Profiles | Competitive role distribution, dual-type prevalence, offensive coverage |
 | Viability Predictor | Custom Pokemon input with ability, nature, speed tier tools, SHAP explainability, tier prediction, and type matchup defender |
 | Model Insights | SHAP importance, confusion matrix, outlier spotlight |
-| Gen 9 Predictions | Model predictions for all 112 Scarlet and Violet Pokemon |
 | Power Rankings | Generations ranked by competitive contribution |
+| Gen 9 Predictions | Model predictions for all 112 Scarlet and Violet Pokemon |
 
 ---
 
@@ -77,8 +79,8 @@ Predicts whether a Pokemon would land in Top Tier (Uber/OU), Mid Tier (UU/RU), o
 
 ### Top SHAP Features (Binary Model)
 
-1. BST - by far the strongest predictor
-2. Speed - more important than any individual offensive stat
+1. BST — by far the strongest predictor
+2. Speed — more important than any individual offensive stat
 3. Offensive total (Attack + Sp.Atk + Speed)
 4. Defensive total (HP + Defense + Sp.Def)
 5. HP
@@ -118,7 +120,7 @@ pokemon-meta-tracker/
 │   ├── data_loader.py                   # Loads, cleans, classifies Pokemon data
 │   ├── feature_engineering.py           # Stat ratios, type encoding, ability scores
 │   ├── model.py                         # XGBoost training, prediction, SHAP utilities
-│   └── visualisations.py                # Eight reusable Plotly chart functions
+│   └── visualisations.py                # Reusable Plotly chart functions
 ├── models/
 │   ├── xgboost_viability.pkl            # Binary viability model
 │   ├── xgboost_tier_classifier.pkl      # 3-class tier model
@@ -127,6 +129,7 @@ pokemon-meta-tracker/
 │   └── streamlit_app.py                 # Nine-tab Streamlit dashboard
 ├── requirements.txt
 ├── pyproject.toml
+├── ROADMAP.md
 └── README.md
 ```
 
@@ -169,11 +172,11 @@ Download these CSV files and place them in `data/raw/`:
 
 | File | Source | Description |
 |---|---|---|
-| `pokemon.csv` | Kaggle - Pokemon Dataset | 1,194 Pokemon, all 9 generations, base stats and typing |
-| `smogon.csv` | Kaggle - Smogon Tiers | Smogon competitive tiers, Gens 1-6 |
-| `pokemon_data.csv` | Kaggle - Competitive Pokemon | Extended tier data covering Gens 7-8 |
+| `pokemon.csv` | Kaggle — Pokemon Dataset | 1,194 Pokemon, all 9 generations, base stats and typing |
+| `smogon.csv` | Kaggle — Smogon Tiers | Smogon competitive tiers, Gens 1-6 |
+| `pokemon_data.csv` | Kaggle — Competitive Pokemon | Extended tier data covering Gens 7-8 |
 
-Ability data is fetched automatically from PokeAPI during the notebook run.
+Ability data is fetched automatically from PokeAPI during the notebook run. No manual download needed.
 
 ---
 
@@ -182,8 +185,9 @@ Ability data is fetched automatically from PokeAPI during the notebook run.
 ### Generate processed data and train both models
 
 Open and run all cells in order:
-1. `notebooks/02_eda_generations.ipynb` - EDA, feature engineering, model training
-2. `notebooks/03_ability_features.ipynb` - Ability scoring and model retraining
+
+1. `notebooks/02_eda_generations.ipynb` — EDA, feature engineering, model training
+2. `notebooks/03_ability_features.ipynb` — Ability scoring and model retraining
 
 ```bash
 jupyter notebook
@@ -207,45 +211,46 @@ Abilities are scored from -3 to +5 based on competitive impact:
 
 | Score | Tier | Examples |
 |---|---|---|
-| 5 | S - Game defining | Speed Boost, Regenerator, Intimidate, Levitate, Drizzle |
-| 4 | A - Excellent | Adaptability, Magic Guard, Swift Swim, Prankster, Disguise |
-| 3 | B - Good | Technician, Guts, Sheer Force, Moxie, Natural Cure |
-| 2 | C - Situational | Static, Flame Body, Rough Skin, Pressure, Filter |
-| 1 | D - Weak/Filler | Keen Eye, Run Away, Sand Veil, Illuminate |
+| 5 | S — Game defining | Speed Boost, Regenerator, Intimidate, Levitate, Drizzle |
+| 4 | A — Excellent | Adaptability, Magic Guard, Swift Swim, Prankster, Disguise |
+| 3 | B — Good | Technician, Guts, Sheer Force, Moxie, Natural Cure |
+| 2 | C — Situational | Static, Flame Body, Rough Skin, Pressure, Filter |
+| 1 | D — Weak/Filler | Keen Eye, Run Away, Sand Veil, Illuminate |
 | -2 to -3 | Crippling | Truant, Slow Start, Defeatist, Klutz, Stall |
 
 ### Viability Predictor
 
-A complete competitive analysis tool for any custom Pokemon. Input stats, typing, ability, and the predictor returns:
+A complete competitive analysis tool for any custom Pokemon. Input stats, typing, and ability to get:
 
-- **Viability verdict** - Competitively Viable / Not Viable with probability score
-- **SHAP waterfall chart** - which stats drove the prediction and by how much
-- **Tier prediction** - Top/Mid/Low Tier with class probabilities and accuracy disclaimer
-- **Nature recommender** - optimal nature based on stat spread, with ability interaction (Speed Boost overrides speed-based natures, weather speed abilities change recommendations)
-- **Speed tier calculator** - shows which competitive Pokemon you outspeed, tie, or get outsped by, adjusted for nature (+/-10%) and ability (weather speed doubles, Speed Boost noted separately)
-- **SEE WHAT BEATS IT popup** - full defensive type chart with ability-granted immunities (Levitate removes Ground weakness, Flash Fire removes Fire weakness etc.), plus top 5 counters per weakness type
-- **10 most similar Pokemon** by BST
+- Viability verdict — Competitively Viable / Not Viable with probability score
+- SHAP waterfall chart — which stats drove the prediction and by how much
+- Tier prediction — Top/Mid/Low Tier with class probabilities and accuracy disclaimer
+- Nature recommender — optimal nature based on stat spread, with ability interaction (Speed Boost overrides speed-based natures, weather speed abilities double effective speed)
+- Speed tier calculator — shows which competitive Pokemon you outspeed, tie, or get outsped by, adjusted for nature (+/-10%) and ability modifiers
+- SEE WHAT BEATS IT popup — full defensive type chart with ability-granted immunities, plus top 5 counters per weakness type
+- 10 most similar Pokemon by BST
 
 ### Gen 9 Inference
-The binary model was trained on Gens 1-7 and validated on Gen 8. It has never seen Gen 9 data. The Gen 9 tab runs predictions on all 112 Scarlet and Violet base form Pokemon purely from their stats, typing and ability scores.
+
+The binary model was trained on Gens 1-7 and validated on Gen 8. It has never seen Gen 9 data. The Gen 9 tab runs predictions on all 112 Scarlet and Violet base form Pokemon purely from their stats, typing, and ability scores.
 
 ### Outlier Spotlight
-Surfaces Pokemon where the model strongly disagrees with Smogon:
-- Overrated (27 Pokemon) - good stats but crippling or mediocre abilities
-- Underrated (1 Pokemon, Dracozolt) - weak stats but broken ability-move combination
+
+Surfaces Pokemon where the model strongly disagrees with Smogon. Overrated (27 Pokemon) have strong stats but crippling abilities. Underrated (Dracozolt) has weak stats but a broken ability-move combination the model cannot capture.
 
 ### Power Rankings
-Ranks all 8 generations by the percentage of their tiered Pokemon that reached viable tiers (UU or above). Gen 6 leads at 37.2% despite being the smallest generation.
+
+Ranks all 8 generations by the percentage of their tiered Pokemon that reached viable tiers (UU or above). Gen 6 leads at 37.2% despite being the smallest generation by Pokemon count.
 
 ---
 
 ## Limitations
 
 - Smogon tier data does not cover Gen 9
-- The model uses base stats, typing and ability scores - movepool and EV spreads are not captured
-- Ability scores are manually curated - some niche abilities may be under or over-valued
-- Nature and speed tier tools are informational only - they do not affect the viability model prediction
-- Viability is defined using Smogon OU singles - VGC doubles would require different data
+- The model uses base stats, typing, and ability scores — movepool and EV spreads are not captured
+- Ability scores are manually curated — some niche abilities may be under or over-valued
+- Nature and speed tier tools are informational only and do not affect the viability model prediction
+- Viability is defined using Smogon OU singles — VGC doubles would require different data
 - Gen 8 Power Ranking may be understated due to thinner tier dataset coverage
 - 3-class tier classifier accuracy (58.3%) reflects the genuine fuzziness of tier boundaries
 
@@ -253,13 +258,13 @@ Ranks all 8 generations by the percentage of their tiered Pokemon that reached v
 
 ## Planned Extensions
 
-- Smogon set display - show recommended competitive set for any real Pokemon
-- Moveset coverage analyser - given 4 moves, calculate total type coverage
-- Pokemon Comparison Tool - side-by-side stat radar charts with SHAP comparison
-- BST Budget Optimiser - find optimal stat distribution for a given BST total
-- Head-to-Head Matchup - compare two Pokemon with SHAP side by side
-- VGC vs Smogon comparison tab
-- Counter finder and team synergy analyser (Phase C/D)
+- Smogon set display — show recommended competitive set for any real Pokemon
+- Moveset coverage analyser — given 4 moves, calculate total type coverage
+- Pokemon Comparison Tool — side-by-side stat radar charts with SHAP comparison
+- Reverse Viability Search — set stat constraints and find the minimum viable distribution
+- BST Budget Optimiser — find optimal stat distribution for a given BST total
+- Movepool features — next meaningful model improvement (estimated ROC-AUC 0.96+)
+- Gen 9 tier labels — pipeline already built, waiting on Smogon finalising Gen 9 tiers
 
 ---
 
@@ -276,3 +281,15 @@ Ranks all 8 generations by the percentage of their tiered Pokemon that reached v
 | Streamlit | Dashboard framework |
 | pyarrow | Parquet file I/O |
 | PokeAPI | Ability data source |
+
+---
+
+## Previous Projects
+
+This project is part of a series of hobby data science builds:
+
+- RAG-Based Document Assistant (LangChain, ChromaDB, Streamlit)
+- AI Stem Separation and Remix Tool (Demucs, Streamlit)
+- Employee Attrition and HR Analytics Dashboard (XGBoost, SHAP, Streamlit)
+- Retail Customer Segmentation (K-Means, RFM, Streamlit)
+- Flight Delay Prediction System (XGBoost, SHAP, PostgreSQL, Streamlit)
